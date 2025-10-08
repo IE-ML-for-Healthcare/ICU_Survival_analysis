@@ -43,13 +43,22 @@ Each notebook performs label consistency checks to ensure survival targets honor
 
 ## Notebook Roadmap
 ### 1. Kaplan–Meier Survival Analysis (`01_ICU_Survival_analysis_KM.ipynb`)
-Focus: cohort QC, censoring validation, non-parametric survival estimates.
+Focus: cohort QC, censoring validation, non-parametric survival estimates with clinically ready reporting.
 
-Highlights:
-- Explore censoring structure, severity score distributions, and missingness before modeling.
-- Estimate overall Kaplan–Meier survival curves with at-risk tables, cumulative hazard, and cumulative incidence plots.
-- Compute clinically relevant metrics such as median survival and RMST at 90 days.
-- Compare subgroups (e.g., sex, SAPS-I tertiles, age bands) with log-rank tests and assess proportional hazards visually via log–log plots to motivate Cox modeling.【F:01_ICU_Survival_analysis_KM.ipynb†L71-L229】
+Workflow highlights:
+- Audit outcome definitions and engineer analysis-ready `duration`/`event` fields before fitting any curve.【F:01_ICU_Survival_analysis_KM.ipynb†L96-L158】
+- Summarize core covariates (age, gender, ICU type, SAPS-I, SOFA) and confirm the observed in-hospital event rate of 13.9%.【F:01_ICU_Survival_analysis_KM.ipynb†L3642-L3647】
+- Fit Kaplan–Meier curves with at-risk tables, cumulative hazard, and cumulative incidence panels to visualize the full survival trajectory.【F:01_ICU_Survival_analysis_KM.ipynb†L2318-L2332】
+
+Key quantitative readouts already computed in the notebook:
+- Survival probabilities at decision-friendly horizons: 94% at 7 days, 71% at 30 days, and 34% at 90 days after ICU admission.【F:01_ICU_Survival_analysis_KM.ipynb†L2788-L2806】
+- Median in-hospital survival time of 58 days, providing a single summary when discussing lengthier admissions.【F:01_ICU_Survival_analysis_KM.ipynb†L2820-L2836】
+- Log-rank comparison by sex (p = 0.25) and SAPS-I severity tertiles (p ≈ 1.0×10⁻⁶) to flag subgroups that warrant focused interpretation.【F:01_ICU_Survival_analysis_KM.ipynb†L3656-L3665】【F:01_ICU_Survival_analysis_KM.ipynb†L3696-L3704】
+- Restricted mean survival time (RMST) to 90 days overall (56.5 days) and by SAPS-I tertile (59.1/61.2/49.5 days for low/mid/high acuity) to communicate average survival time spent in hospital.【F:01_ICU_Survival_analysis_KM.ipynb†L3730-L3738】
+
+Interpretation guidance:
+- Track how gaps between high- and low-acuity survival curves shrink from 0.58 at 15 days to 0.11 at 45 days, signalling where differences converge.【F:01_ICU_Survival_analysis_KM.ipynb†L3826-L3834】
+- Use the log-minus-log diagnostic narrative to judge whether proportional hazards is plausible before transitioning to Cox models, and consider RMST or stratification if the assumption weakens.【F:01_ICU_Survival_analysis_KM.ipynb†L3786-L3808】
 
 ### 2. Cox PH & Random Survival Forests (`02_ICU_Survival_analysis_CPH.ipynb`)
 Focus: interpretable and flexible survival modeling.
