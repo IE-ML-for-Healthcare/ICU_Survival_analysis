@@ -9,6 +9,10 @@ import matplotlib.pyplot as plt
 from lifelines import KaplanMeierFitter
 from lifelines.plotting import add_at_risk_counts
 from lifelines.statistics import logrank_test, multivariate_logrank_test
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import OneHotEncoder
 
 
 def _coerce_series(x: Union[pd.Series, Iterable]) -> pd.Series:
@@ -117,3 +121,36 @@ def km_by_group(
                 (title or f"Survival by {group_col}") + f"  [{_format_p(test_result.p_value)}]")
 
     return fig, ax, test_result
+
+def detect_feature_types(X: pd.DataFrame):
+    """Return lists of numeric and categorical column names"""
+    numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+    categorical_cols = [c for c in X.columns if not pd.api.types.is_numeric_dtype(X[c])]
+    return numeric_cols, categorical_cols
+
+def build_preprocessor(numeric_cols, categorical_cols, num_strategy="median", cat_strategy="most_frequent"):
+    """Build a ColumnTransformer for numeric and categorical preprocessing"""
+    num_tf = Pipeline(steps=[("imputer", SimpleImputer(strategy=num_strategy))])
+    if categorical_cols and len(categorical_cols) > 0:
+        # Using sparse=False for broad sklearn compatibility
+        cat_tf = Pipeline(steps=[
+            ("imputer", SimpleImputer(strategy=cat_strategy)),
+            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse=False))
+        ])
+    else:
+        cat_tf = "drop"
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", num_tf, numeric_cols),
+            ("cat", cat_tf, categorical_cols)
+        ],
+        remainder="drop",
+        verbose_feature_names_out=True
+    )
+    return preprocessor
+
+def to_dataframe(preprocessor: ColumnTransformer, X: pd.DataFrame) -> pd.DataFrame:
+    """Transform X with preprocessor and return a DataFrame with feature names preserved"""
+    Xt = preprocessor.transform(X)
+    cols = preprocessor.get_feature_names_out()
+    return pd.DataFrame(Xt, columns=cols, index=X.index)
