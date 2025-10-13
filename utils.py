@@ -2,6 +2,9 @@
 # Minimal, student-friendly utilities for Kaplan–Meier plotting by group
 # Dependencies: lifelines, matplotlib, pandas, numpy
 
+from sklearn.metrics import roc_auc_score, average_precision_score, brier_score_loss, confusion_matrix
+from sklearn.metrics import roc_auc_score, average_precision_score, brier_score_loss
+from sklearn.isotonic import IsotonicRegression
 from sklearn.calibration import CalibrationDisplay
 from lifelines import CoxPHFitter
 from sksurv.nonparametric import cumulative_incidence_competing_risks
@@ -591,3 +594,86 @@ def plot_calibration_at_horizon(
     ax.set_ylabel(f"Observed fraction at {int(horizon_days)} days")
     ax.grid(True, linestyle="--", alpha=0.5)
     plt.show()
+
+
+def fit_isotonic_calibrator(y_val, p_val):
+    """Fit an isotonic probability calibrator on validation predictions"""
+    y = np.asarray(y_val, dtype=int)
+    p = np.asarray(p_val, dtype=float)
+    eps = 1e-6
+    cal = IsotonicRegression(out_of_bounds="clip")
+    cal.fit(np.clip(p, eps, 1 - eps), y)
+    return cal
+
+
+def apply_calibrator(cal, p):
+    """Apply a fitted calibrator to probabilities"""
+    p = np.asarray(p, dtype=float)
+    eps = 1e-6
+    return np.clip(cal.transform(np.clip(p, eps, 1 - eps)), 0, 1)
+
+
+def fixed_horizon_metrics(y_true, p_prob, mask):
+    """AUROC, AUPRC, Brier, n_evaluable on the evaluable cohort for a horizon"""
+    y = np.asarray(y_true)[mask]
+    p = np.asarray(p_prob)[mask]
+    auroc = roc_auc_score(y, p) if len(np.unique(y)) > 1 else np.nan
+    auprc = average_precision_score(y, p)
+    brier = brier_score_loss(y, p)
+    return {"auroc": float(auroc), "auprc": float(auprc), "brier": float(brier), "n_evaluable": int(mask.sum())}
+
+# utils.py
+
+
+def align_evaluable(labels_dict, pred_df, prob_col):
+    """Return aligned arrays y, p for the evaluable cohort at a horizon"""
+    mask = labels_dict["mask"]
+    y = labels_dict["y_true"]
+    df = pd.DataFrame({"y": y, "p": pred_df[prob_col]}).loc[mask].dropna()
+    return df["y"].to_numpy().astype(int), df["p"].to_numpy().astype(float)
+
+
+def decision_curve_df(y, p, thresholds):
+    """Net benefit vs threshold and treat-all baseline"""
+    N = len(y)
+    out = []
+    for t in thresholds:
+        if t >= 1.0:
+            continue
+        yhat = (p >= t).astype(int)
+        tn, fp, fn, tp = confusion_matrix(y, yhat, labels=[0, 1]).ravel()
+        pt = t
+        nb_model = (tp / N) - (fp / N) * (pt / (1 - pt))
+        nb_all = (y.sum() / N) - ((N - y.sum()) / N) * (pt / (1 - pt))
+        out.append({"threshold": t, "nb_model": nb_model, "nb_all": nb_all})
+    return pd.DataFrame(out)
+
+
+def select_threshold_by_net_benefit(y_val, p_val, thresholds):
+    """Return t* that maximizes net benefit on validation"""
+    nb = decision_curve_df(y_val, p_val, thresholds)
+    return float(nb.loc[nb["nb_model"].idxmax(), "threshold"])
+
+
+def fit_isotonic_calibrator(y_val, p_val):
+    """Fit isotonic calibration on validation"""
+    cal = IsotonicRegression(out_of_bounds="clip")
+    eps = 1e-6
+    cal.fit(np.clip(p_val, eps, 1 - eps), y_val.astype(int))
+    return cal
+
+
+def apply_calibrator(cal, p):
+    eps = 1e-6
+    p = np.clip(p, eps, 1 - eps)
+    return np.clip(cal.transform(p), 0, 1)
+
+
+def fixed_horizon_metrics(y_true, p_prob, mask):
+    """AUROC, AUPRC, Brier, n_evaluable on the evaluable cohort"""
+    y = np.asarray(y_true)[mask]
+    p = np.asarray(p_prob)[mask]
+    auroc = roc_auc_score(y, p) if len(np.unique(y)) > 1 else np.nan
+    auprc = average_precision_score(y, p)
+    brier = brier_score_loss(y, p)
+    return {"auroc": float(auroc), "auprc": float(auprc), "brier": float(brier), "n_evaluable": int(mask.sum())}
