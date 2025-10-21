@@ -1,125 +1,68 @@
 # ICU Survival Analysis
 
-## Introduction and Purpose
-This repository accompanies a two-part, notebook-driven tutorial on intensive care unit (ICU) survival analysis using the [PhysioNet/Computing in Cardiology Challenge 2012 dataset](https://physionet.org/content/challenge-2012/1.0.0/). The project illustrates how to quantify in-hospital mortality risk for critically ill patients and how to communicate survival insights to multidisciplinary ICU teams. By working through the notebooks you will:
+## Overview
+This repository provides a three-part, notebook-driven walkthrough of intensive care unit (ICU) survival analysis using the publicly available PhysioNet/Computing in Cardiology Challenge 2012 dataset. The workflow starts with cohort curation and Kaplan–Meier (KM) exploration, progresses to multivariable Cox proportional hazards (CPH) modeling, and culminates in decision tree and random forest survival classifiers that operate at clinically actionable horizons (7, 30, and 60 days). Together, the notebooks show how to quantify in-hospital mortality risk, interpret model outputs, and translate analytical findings into operational guidance for multidisciplinary ICU teams.【F:01_ICU_Survival_analysis_KM.ipynb†L84-L109】【F:03_ICU_Survival_analysis_DT_RF.ipynb†L1-L36】
 
-- Understand the impact of right censoring on survival estimates and why Kaplan–Meier methods remain essential in the ICU setting.
-- Translate aggregate survival curves into clinically interpretable metrics at 7, 30, and 90 days after admission.
-- Build and critique individual-risk models with Cox proportional hazards and Random Survival Forests (RSF) to support triage, escalation, and resource-planning decisions.
+## Dataset
+All analyses rely on the PhysioNet Challenge 2012 Set A cohort (4,000 de-identified ICU stays) and its engineered descriptors: record identifiers, severity scores (SAPS-I, SOFA), length of stay, survival time, and in-hospital death indicators. The KM notebook derives analysis-ready `duration` and `event` variables that align with the challenge definitions to support consistent censoring logic across notebooks.【F:01_ICU_Survival_analysis_KM.ipynb†L84-L109】
 
-The primary audience includes clinical data scientists, intensivists exploring data-driven quality initiatives, and graduate students learning applied survival analysis in healthcare.
+## Environment setup
+A Conda environment specification is provided for reproducibility. Create and activate the environment with:
 
-## Motivation and Clinical Context
-Critically ill patients exhibit high early mortality and complex discharge dynamics. Traditional binary classification (alive/dead) ignores how risk evolves over time and fails to acknowledge the dominance of censoring (patients discharged alive). Survival analysis bridges this gap by modeling the temporal dimension of risk. The notebooks highlight:
-
-- **Front-loaded mortality**: most ICU deaths happen within the first month, which is central for staffing, family communication, and planning follow-up services.
-- **Competing outcomes**: discharge alive versus in-hospital death and how Kaplan–Meier, cumulative hazard, and cumulative incidence views complement each other.
-- **Actionable horizons**: communicating 30- and 90-day restricted mean survival times (RMST) to clinicians, families, and administrators.
-- **Model governance**: validating proportional hazards assumptions and complementing interpretable Cox models with flexible RSF models when non-linearities dominate.
-
-## Repository Structure
-```
-ICU_Survival_analysis/
-├── 01_ICU_Survival_analysis_KM.ipynb   # Cohort curation, censoring checks, Kaplan–Meier and cumulative incidence views
-├── 02_ICU_Survival_analysis_CPH.ipynb  # Cox PH workflow, proportional hazards diagnostics, Random Survival Forest comparison
-├── PhysionetChallenge2012-set-a.csv.gz # Aggregated outcomes and predictors for 4,000 ICU stays (PhysioNet Challenge 2012, Set A)
-├── utils.py                            # Helper functions shared across notebooks (data cleaning, plotting utilities)
-├── environment.yml                     # Conda environment specification for reproducible execution
-└── README.md                           # Project overview and usage guide (this file)
-```
-
-## Data Description
-The project uses the publicly available PhysioNet/Computing in Cardiology Challenge 2012 training set A, a cohort of 4,000 adult ICU stays with 120 engineered variables summarizing demographics, vital signs, laboratory values, severity scores, and ventilator usage.【04e1d7†L1-L14】 Key outcome variables derived in the notebooks include:
-
-- **Length_of_stay**: days from ICU admission to hospital discharge or in-hospital death (time origin for Kaplan–Meier analysis).
-- **Survival**: days to death when it occurs within follow-up; coded as −1 when death is unobserved.
-- **In-hospital_death**: binary indicator of in-hospital mortality.
-- **Duration (T)**: analysis-ready time variable equal to `Length_of_stay` for in-hospital outcomes.
-- **Event (E)**: event indicator inferred from the dataset rules and aligned with `In-hospital_death`.
-
-Each notebook performs label consistency checks to ensure survival targets honor the published dataset definitions.【F:01_ICU_Survival_analysis_KM.ipynb†L82-L126】【F:02_ICU_Survival_analysis_CPH.ipynb†L1-L34】 No raw protected health information (PHI) is included; all variables are de-identified and publicly distributed by PhysioNet.
-
-> **Note:** The compressed CSV is ~23 MB. Loading all columns into memory requires ~1.5 GB RAM. Consider selective column loading or dtype optimization when scaling to larger cohorts.【04e1d7†L1-L14】
-
-## Notebook Roadmap
-### 1. Kaplan–Meier Survival Analysis (`01_ICU_Survival_analysis_KM.ipynb`)
-Focus: cohort QC, censoring validation, non-parametric survival estimates with clinically ready reporting.
-
-Workflow highlights:
-- Audit outcome definitions and engineer analysis-ready `duration`/`event` fields before fitting any curve.【F:01_ICU_Survival_analysis_KM.ipynb†L96-L158】
-- Summarize core covariates (age, gender, ICU type, SAPS-I, SOFA) and confirm the observed in-hospital event rate of 13.9%.【F:01_ICU_Survival_analysis_KM.ipynb†L3642-L3647】
-- Fit Kaplan–Meier curves with at-risk tables, cumulative hazard, and cumulative incidence panels to visualize the full survival trajectory.【F:01_ICU_Survival_analysis_KM.ipynb†L2318-L2332】
-
-Key quantitative readouts already computed in the notebook:
-- Survival probabilities at decision-friendly horizons: 94% at 7 days, 71% at 30 days, and 34% at 90 days after ICU admission.【F:01_ICU_Survival_analysis_KM.ipynb†L2788-L2806】
-- Median in-hospital survival time of 58 days, providing a single summary when discussing lengthier admissions.【F:01_ICU_Survival_analysis_KM.ipynb†L2820-L2836】
-- Log-rank comparison by sex (p = 0.25) and SAPS-I severity tertiles (p ≈ 1.0×10⁻⁶) to flag subgroups that warrant focused interpretation.【F:01_ICU_Survival_analysis_KM.ipynb†L3656-L3665】【F:01_ICU_Survival_analysis_KM.ipynb†L3696-L3704】
-- Restricted mean survival time (RMST) to 90 days overall (56.5 days) and by SAPS-I tertile (59.1/61.2/49.5 days for low/mid/high acuity) to communicate average survival time spent in hospital.【F:01_ICU_Survival_analysis_KM.ipynb†L3730-L3738】
-
-Interpretation guidance:
-- Track how gaps between high- and low-acuity survival curves shrink from 0.58 at 15 days to 0.11 at 45 days, signalling where differences converge.【F:01_ICU_Survival_analysis_KM.ipynb†L3826-L3834】
-- Use the log-minus-log diagnostic narrative to judge whether proportional hazards is plausible before transitioning to Cox models, and consider RMST or stratification if the assumption weakens.【F:01_ICU_Survival_analysis_KM.ipynb†L3786-L3808】
-
-### 2. Cox PH & Random Survival Forests (`02_ICU_Survival_analysis_CPH.ipynb`)
-Focus: interpretable and flexible survival modeling.
-
-Highlights:
-- Fit Cox proportional hazards models, report hazard ratios with 95% confidence intervals, and perform Schoenfeld residual diagnostics.
-- Train Random Survival Forest models to capture non-linearities and interactions beyond the Cox framework.
-- Evaluate models with concordance index, time-dependent AUC (7, 30, 90 days), and integrated Brier score; calibrate 30-day survival probabilities and stratify patients into risk quintiles.【F:02_ICU_Survival_analysis_CPH.ipynb†L1-L34】
-
-## Installation and Environment Setup
-The recommended setup uses Conda or Mamba with the provided environment file.
-
-### Prerequisites
-- Conda (Anaconda, Miniconda) or Mamba ≥ 23.1
-- Git
-
-### Create the Environment
 ```bash
-# Clone the repository
 git clone https://github.com/<your-org>/ICU_Survival_analysis.git
 cd ICU_Survival_analysis
-
-# Create and activate the conda environment
 conda env create -f environment.yml
 conda activate icu-survival
 ```
 
-The `environment.yml` file installs Python 3.11 and key scientific libraries required for the notebooks, including pandas, numpy, matplotlib, seaborn, scikit-learn, lifelines, scikit-survival, and JupyterLab.【F:environment.yml†L1-L12】
+The environment installs Python 3.11, pandas, numpy, matplotlib, seaborn, scikit-learn, lifelines, scikit-survival, and JupyterLab—covering all dependencies used across the notebooks.【F:environment.yml†L1-L15】
 
-> **Optional:** If you do not use Conda, create a virtual environment with Python 3.11 and install the dependencies listed in `environment.yml` via `pip`. The `scikit-survival` package may require system-level libraries (e.g., `libgomp` on Linux). Consult the [project documentation](https://scikit-survival.readthedocs.io/en/stable/install.html) for platform-specific instructions.
+## Workflow at a glance
 
-## Quickstart Workflow
-1. **Launch JupyterLab**
-   ```bash
-   jupyter lab
-   ```
-2. **Open the notebooks in order**
-   - Start with `01_ICU_Survival_analysis_KM.ipynb` to prepare the cohort, confirm censoring logic, and understand global survival patterns.
-   - Proceed to `02_ICU_Survival_analysis_CPH.ipynb` for covariate-adjusted modeling and risk stratification.
-3. **Configure notebook settings**
-   - Update file paths if you relocate the dataset.
-   - Adjust plotting aesthetics (e.g., figure size) through the helper functions in `utils.py` as needed.
-4. **Run all cells** to reproduce the analysis. Expect the Kaplan–Meier notebook to execute within a few minutes on a modern laptop; the Random Survival Forest section may take longer depending on CPU cores.
+| Notebook | Primary focus | Representative outputs |
+| --- | --- | --- |
+| `01_ICU_Survival_analysis_KM.ipynb` | Data validation, censoring checks, Kaplan–Meier, cumulative incidence, Nelson–Aalen, and subgroup log-rank tests | Survival probabilities at 7/30/90 days, median survival, 90-day RMST, SAPS-I stratified comparisons |
+| `02_ICU_Survival_analysis_CPH.ipynb` | Leakage-aware feature curation, train/validation/test splits, univariable and multivariable CPH modeling, proportional hazards diagnostics, time-dependent metrics, baseline comparisons | Age-only HR and C-index diagnostics, multivariable HR interpretation (SOFA, ICU type), positive Brier skill scores, calibration assessment |
+| `03_ICU_Survival_analysis_DT_RF.ipynb` | Shared preprocessing pipeline, decision tree and random forest classifiers at fixed horizons, threshold analysis, decision curves, fairness checks, final model showdown | Decision tree AUROC band (≈0.68–0.76), random forest AUROC 0.82 at 7 days, subgroup AUROC gaps, cross-model calibration comparison |
 
-## Reproducing Results & Extending the Analysis
-- **Sensitivity analyses**: Modify censoring definitions (e.g., 60-day RMST) or subgroup stratifications to match local ICU policies.
-- **Feature engineering**: Incorporate additional physiologic variables or temporal aggregations to enhance RSF performance.
-- **External validation**: Replace the dataset with your institutional EHR extracts, ensuring identical variable schema and careful de-identification.
+## Step-by-step analysis summary
+
+### 1. Cohort QC and Kaplan–Meier exploration (`01_ICU_Survival_analysis_KM.ipynb`)
+* Confirms an in-hospital death rate of 13.85%, ensuring the time-to-event targets and censoring logic are consistent before modeling.【F:01_ICU_Survival_analysis_KM.ipynb†L3632-L3634】
+* Reports KM survival probabilities of 0.942, 0.713, and 0.341 at 7, 30, and 90 days, respectively, providing decision-ready risk summaries for early, intermediate, and prolonged ICU stays.【F:01_ICU_Survival_analysis_KM.ipynb†L2791-L2794】
+* Calculates a median survival time of 58 days and a 90-day restricted mean survival time (RMST) of 56.5 days overall, with SAPS-I tertiles spanning 49.5–61.2 days to quantify the expected time patients spend in-hospital under competing discharge.【F:01_ICU_Survival_analysis_KM.ipynb†L2825-L2832】【F:01_ICU_Survival_analysis_KM.ipynb†L3730-L3733】
+* Uses log-rank testing and narrative guidance to highlight that sex differences are not statistically significant (p ≈ 0.25) while SAPS-I severity drives clinically meaningful divergence, orienting which subgroups merit escalation planning.【F:01_ICU_Survival_analysis_KM.ipynb†L3656-L3657】【F:01_ICU_Survival_analysis_KM.ipynb†L2764-L2778】
+
+### 2. Cox proportional hazards modeling (`02_ICU_Survival_analysis_CPH.ipynb`)
+* Demonstrates leakage-aware preprocessing (train-only fitting of pipelines) and motivates multivariable modeling by showing that age alone has an HR of 0.992 with a weak C-index of 0.518—evidence of confounding and limited prognostic value in isolation.【F:02_ICU_Survival_analysis_CPH.ipynb†L1250-L1277】
+* Fits a penalized multivariable CPH model with moderate validation concordance (0.659) and interpretable hazard ratios, emphasizing SOFA as the dominant risk driver (HR 1.088) and ICU type effects such as the protective CSRU indicator (HR 0.420).【F:02_ICU_Survival_analysis_CPH.ipynb†L1645-L1699】
+* Evaluates time-dependent discrimination and calibration using cumulative dynamic AUC, Brier score, and competing-risk-aware cumulative incidence, positioning the model as a moderate yet actionable screener across 7, 30, and 60-day horizons.【F:02_ICU_Survival_analysis_CPH.ipynb†L2360-L2392】【F:02_ICU_Survival_analysis_CPH.ipynb†L2600-L2658】
+* Benchmarks against a Kaplan–Meier baseline and documents positive Brier Skill Scores at all horizons, confirming the multivariable model adds signal beyond cohort-level averages before applying isotonic calibration when warranted.【F:02_ICU_Survival_analysis_CPH.ipynb†L2529-L2634】
+
+### 3. Decision tree and random forest horizon models (`03_ICU_Survival_analysis_DT_RF.ipynb`)
+* Builds a shared preprocessing pipeline with stratified splits reused across models to ensure fair comparisons and leakage-free evaluation of 7/30/60-day mortality classification tasks.【F:03_ICU_Survival_analysis_DT_RF.ipynb†L1-L58】【F:03_ICU_Survival_analysis_DT_RF.ipynb†L93-L132】
+* Trains interpretable decision trees whose test AUROC ranges from roughly 0.68–0.76 at 7 days, highlighting the transparency-versus-accuracy trade-offs that make trees valuable for bedside rule generation but less competitive for precise risk scoring.【F:03_ICU_Survival_analysis_DT_RF.ipynb†L1451-L1461】
+* Deploys random forests that improve short-term discrimination to an AUROC of 0.82 at 7 days while still requiring workload-aware threshold selection and calibration to support operational adoption.【F:03_ICU_Survival_analysis_DT_RF.ipynb†L2245-L2254】【F:03_ICU_Survival_analysis_DT_RF.ipynb†L2736-L2744】
+* Audits fairness and subgroup stability, noting gender-specific AUROC gaps (0.871 vs. 0.778) and reinforcing the need to monitor differential performance before deployment.【F:03_ICU_Survival_analysis_DT_RF.ipynb†L3092-L3115】
+
+## Cross-model comparison and clinical positioning
+The final showdown contrasts calibrated KM-derived survival estimates, CPH, decision tree, and random forest outputs. Random forests dominate 7-day discrimination, all models converge around 30-day performance, and decision trees catch up by 60 days, while CPH and random forests remain the most reliable in low-risk calibration bands. The practical takeaway: use random forests for maximal predictive accuracy, Cox models for interpretable effect estimates, and decision trees when transparent if-then logic outweighs marginal accuracy gains.【F:03_ICU_Survival_analysis_DT_RF.ipynb†L3503-L3533】
+
+## Running the notebooks
+1. Launch JupyterLab (or Jupyter Notebook) inside the activated environment: `jupyter lab`.
+2. Execute the notebooks in order (`01` → `02` → `03`) to reproduce the entire analysis pipeline. Update dataset paths if you relocate the CSV and adjust plotting settings through `utils.py` as needed.
+3. Expect the KM notebook to finish within minutes on a modern laptop; tree and forest training may take longer depending on available CPU cores.
+
+## Extending the analysis
+* Swap in institutional cohorts that match the PhysioNet schema to perform external validation and local calibration.
+* Expand feature engineering (e.g., time-windowed labs, ventilator settings) to boost discrimination in the CPH and ensemble models.
+* Iterate on fairness checks (additional demographics, comorbidities) and decision-curve thresholds to align alerts with staffing capacity.【F:03_ICU_Survival_analysis_DT_RF.ipynb†L2968-L3129】
 
 ## Troubleshooting
-- **Missing `scikit-survival`**: Ensure you install from Conda Forge or use wheels compatible with your platform; compiling from source requires Cython and a C compiler.
-- **Memory constraints**: Load a subset of columns using pandas `usecols` when exploring on resource-limited machines.
-- **Plot rendering issues**: If running in a headless environment, use JupyterLab with `ipympl` or export plots directly to files via Matplotlib.
+* Install `scikit-survival` via Conda Forge to avoid compilation issues on Linux and macOS.
+* Use pandas `usecols` to reduce memory pressure when exploring the 23 MB CSV on resource-limited machines.
+* If running headless, export Matplotlib figures directly to disk or enable interactive backends compatible with your environment.
 
-## Citation and Attribution
-If you use this repository in academic work, please cite:
-
-- Goldberger AL, Amaral LAN, Glass L, et al. *PhysioBank, PhysioToolkit, and PhysioNet: Components of a New Research Resource for Complex Physiologic Signals.* Circulation. 2000;101(23):e215–e220.
-- Harrell FE Jr. *Regression Modeling Strategies.* Springer; 2015.
-- Ishwaran H, Kogalur UB, Blackstone EH, Lauer MS. *Random Survival Forests.* Annals of Applied Statistics. 2008;2(3):841–860.
-
-## License
-This project is distributed under the MIT License (see [`LICENSE`](LICENSE)). Dataset licensing follows the PhysioNet credentialed data use agreement; consult the PhysioNet repository for reuse requirements.
-
+## References and license
+Please cite PhysioNet, Harrell’s *Regression Modeling Strategies*, and Ishwaran et al. on Random Survival Forests when using this repository. Code is released under the MIT License; dataset reuse follows PhysioNet’s credentialed data use agreement (see [`LICENSE`](LICENSE)).
