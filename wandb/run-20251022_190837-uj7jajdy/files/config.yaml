@@ -1,0 +1,67 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            sliim2x1lchtgyebpdnh5odh1nbqsb2p:
+                codePath: 04_ICU_ML_LR_DT_RF.ipynb
+                codePathLocal: 04_ICU_ML_LR_DT_RF.ipynb
+                cpu_count: 16
+                cpu_count_logical: 22
+                cudaVersion: "12.8"
+                disk:
+                    /:
+                        total: "1021821579264"
+                        used: "273439653888"
+                email: idiazl@faculty.ie.edu
+                executable: c:\Users\idiaz\miniconda3\envs\icu-survival\python.exe
+                git:
+                    commit: f9eb526555ec59806cb65bdb0f147c8bbea2c79f
+                    remote: https://github.com/IE-ML-for-Healthcare/ICU_Survival_analysis.git
+                gpu: NVIDIA GeForce RTX 4060 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 3072
+                      memoryTotal: "8585740288"
+                      name: NVIDIA GeForce RTX 4060 Laptop GPU
+                      uuid: GPU-c8cc09aa-1864-aad2-d166-fe5d44ecf25d
+                host: IvanDiaz
+                memory:
+                    total: "33752997888"
+                os: Windows-10-10.0.26100-SP0
+                program: c:\Users\idiaz\OneDrive - IE University\00. IE Courses\01. 2025_H2\1. ML4HC\ICU_Survival_analysis\04_ICU_ML_LR_DT_RF.ipynb
+                python: CPython 3.11.14
+                root: c:\Users\idiaz\OneDrive - IE University\00. IE Courses\01. 2025_H2\1. ML4HC\ICU_Survival_analysis
+                startedAt: "2025-10-22T17:08:37.148462Z"
+                writerId: sliim2x1lchtgyebpdnh5odh1nbqsb2p
+        m: []
+        python_version: 3.11.14
+        t:
+            "1":
+                - 5
+                - 53
+            "2":
+                - 5
+                - 53
+            "3":
+                - 2
+                - 16
+            "4": 3.11.14
+            "5": 0.22.2
+            "8":
+                - 1
+                - 3
+            "12": 0.22.2
+            "13": windows-amd64
+dataset:
+    value: physionet2012_set_a
+framework:
+    value: scikit-learn
+numpy_version:
+    value: 2.3.3
+pandas_version:
+    value: 2.3.3
+python_version:
+    value: 3.11.14
+seed:
+    value: 42

@@ -1,0 +1,1 @@
+{"train_rows":2400,"n_rows":4000,"_runtime":1615,"val_rows":800,"test_rows":800,"_step":3,"n_columns":120,"positive_rate":0.1385,"_wandb":{"runtime":1615},"num_features":118,"_timestamp":1.7611518921603599e+09,"cat_features":0}

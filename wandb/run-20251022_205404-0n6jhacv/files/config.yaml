@@ -1,0 +1,69 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            5ocr6nsaeihs1n9bolv2f55z1piugtne:
+                codePath: 04_ICU_ML_LR_DT_RF.ipynb
+                codePathLocal: 04_ICU_ML_LR_DT_RF.ipynb
+                cpu_count: 16
+                cpu_count_logical: 22
+                cudaVersion: "12.8"
+                disk:
+                    /:
+                        total: "1021821579264"
+                        used: "273742860288"
+                email: idiazl@faculty.ie.edu
+                executable: c:\Users\idiaz\miniconda3\envs\icu-survival\python.exe
+                git:
+                    commit: f9eb526555ec59806cb65bdb0f147c8bbea2c79f
+                    remote: https://github.com/IE-ML-for-Healthcare/ICU_Survival_analysis.git
+                gpu: NVIDIA GeForce RTX 4060 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 3072
+                      memoryTotal: "8585740288"
+                      name: NVIDIA GeForce RTX 4060 Laptop GPU
+                      uuid: GPU-c8cc09aa-1864-aad2-d166-fe5d44ecf25d
+                host: IvanDiaz
+                memory:
+                    total: "33752997888"
+                os: Windows-10-10.0.26100-SP0
+                program: c:\Users\idiaz\OneDrive - IE University\00. IE Courses\01. 2025_H2\1. ML4HC\ICU_Survival_analysis\04_ICU_ML_LR_DT_RF.ipynb
+                python: CPython 3.11.14
+                root: c:\Users\idiaz\OneDrive - IE University\00. IE Courses\01. 2025_H2\1. ML4HC\ICU_Survival_analysis
+                startedAt: "2025-10-22T18:54:04.308097Z"
+                writerId: 5ocr6nsaeihs1n9bolv2f55z1piugtne
+        m: []
+        python_version: 3.11.14
+        t:
+            "1":
+                - 5
+                - 53
+            "2":
+                - 5
+                - 53
+            "3":
+                - 2
+                - 16
+            "4": 3.11.14
+            "5": 0.22.2
+            "8":
+                - 1
+                - 3
+            "10":
+                - 20
+            "12": 0.22.2
+            "13": windows-amd64
+chosen_threshold_sensitivity:
+    value: 0.321223955496573
+chosen_threshold_specificity:
+    value: 0.2263541808615648
+model_type:
+    value: random_forest
+seed:
+    value: 42
+target_sensitivity:
+    value: 0.85
+target_specificity:
+    value: 0.9
