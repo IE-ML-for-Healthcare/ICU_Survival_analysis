@@ -1,0 +1,10 @@
+wandb_version: 1
+
+max_depth:
+  value: 16
+max_features:
+  value: sqrt
+min_samples_leaf:
+  value: 3
+n_estimators:
+  value: 500
