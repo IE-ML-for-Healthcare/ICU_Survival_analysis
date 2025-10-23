@@ -1,0 +1,211 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            rjwnr4u4ouqswocfavgc1mkv94sa2fhw:
+                codePath: 04_ICU_ML_W&B.ipynb
+                codePathLocal: 04_ICU_ML_W&B.ipynb
+                cpu_count: 16
+                cpu_count_logical: 22
+                cudaVersion: "12.8"
+                disk:
+                    /:
+                        total: "1021821579264"
+                        used: "274551410688"
+                email: idiazl@faculty.ie.edu
+                executable: c:\Users\idiaz\miniconda3\envs\icu-survival\python.exe
+                git:
+                    commit: 1dc52688df69a828ea6947b624665062f2b53611
+                    remote: https://github.com/IE-ML-for-Healthcare/ICU_Survival_analysis.git
+                gpu: NVIDIA GeForce RTX 4060 Laptop GPU
+                gpu_count: 1
+                gpu_nvidia:
+                    - architecture: Ada
+                      cudaCores: 3072
+                      memoryTotal: "8585740288"
+                      name: NVIDIA GeForce RTX 4060 Laptop GPU
+                      uuid: GPU-c8cc09aa-1864-aad2-d166-fe5d44ecf25d
+                host: IvanDiaz
+                memory:
+                    total: "33752997888"
+                os: Windows-10-10.0.26100-SP0
+                program: c:\Users\idiaz\OneDrive - IE University\00. IE Courses\01. 2025_H2\1. ML4HC\ICU_Survival_analysis\04_ICU_ML_W&B.ipynb
+                python: CPython 3.11.14
+                root: c:\Users\idiaz\OneDrive - IE University\00. IE Courses\01. 2025_H2\1. ML4HC\ICU_Survival_analysis
+                startedAt: "2025-10-23T10:24:31.017009Z"
+                writerId: rjwnr4u4ouqswocfavgc1mkv94sa2fhw
+        m: []
+        python_version: 3.11.14
+        t:
+            "1":
+                - 5
+                - 53
+            "2":
+                - 5
+                - 53
+            "3":
+                - 2
+                - 13
+                - 16
+            "4": 3.11.14
+            "5": 0.22.2
+            "8":
+                - 1
+                - 3
+            "10":
+                - 20
+            "12": 0.22.2
+            "13": windows-amd64
+        visualize:
+            confusion_matrix_test_at_sensitivity:
+                panel_config:
+                    fieldSettings:
+                        Actual: Actual
+                        Predicted: Predicted
+                        nPredictions: nPredictions
+                    panelDefId: wandb/confusion_matrix/v1
+                    stringSettings:
+                        title: Confusion Matrix Curve
+                    transform:
+                        name: tableWithLeafColNames
+                    userQuery:
+                        queryFields:
+                            - args:
+                                - name: runSets
+                                  value: ${runSets}
+                              fields:
+                                - fields: []
+                                  name: id
+                                - fields: []
+                                  name: name
+                                - fields: []
+                                  name: _defaultColorIndex
+                                - args:
+                                    - name: tableKey
+                                      value: confusion_matrix_test_at_sensitivity_table
+                                  fields: []
+                                  name: summaryTable
+                              name: runSets
+                panel_type: Vega2
+            confusion_matrix_test_at_specificity:
+                panel_config:
+                    fieldSettings:
+                        Actual: Actual
+                        Predicted: Predicted
+                        nPredictions: nPredictions
+                    panelDefId: wandb/confusion_matrix/v1
+                    stringSettings:
+                        title: Confusion Matrix Curve
+                    transform:
+                        name: tableWithLeafColNames
+                    userQuery:
+                        queryFields:
+                            - args:
+                                - name: runSets
+                                  value: ${runSets}
+                              fields:
+                                - fields: []
+                                  name: id
+                                - fields: []
+                                  name: name
+                                - fields: []
+                                  name: _defaultColorIndex
+                                - args:
+                                    - name: tableKey
+                                      value: confusion_matrix_test_at_specificity_table
+                                  fields: []
+                                  name: summaryTable
+                              name: runSets
+                panel_type: Vega2
+            pr_curve_val:
+                panel_config:
+                    fieldSettings:
+                        class: class
+                        x: recall
+                        "y": precision
+                    panelDefId: wandb/area-under-curve/v0
+                    stringSettings:
+                        title: Precision-Recall Curve
+                        x-axis-title: Recall
+                        y-axis-title: Precision
+                    transform:
+                        name: tableWithLeafColNames
+                    userQuery:
+                        queryFields:
+                            - args:
+                                - name: runSets
+                                  value: ${runSets}
+                              fields:
+                                - fields: []
+                                  name: id
+                                - fields: []
+                                  name: name
+                                - fields: []
+                                  name: _defaultColorIndex
+                                - args:
+                                    - name: tableKey
+                                      value: pr_curve_val_table
+                                  fields: []
+                                  name: summaryTable
+                              name: runSets
+                panel_type: Vega2
+            roc_curve_val:
+                panel_config:
+                    fieldSettings:
+                        class: class
+                        x: fpr
+                        "y": tpr
+                    panelDefId: wandb/area-under-curve/v0
+                    stringSettings:
+                        title: ROC Curve
+                        x-axis-title: False positive rate
+                        y-axis-title: True positive rate
+                    transform:
+                        name: tableWithLeafColNames
+                    userQuery:
+                        queryFields:
+                            - args:
+                                - name: runSets
+                                  value: ${runSets}
+                              fields:
+                                - fields: []
+                                  name: id
+                                - fields: []
+                                  name: name
+                                - fields: []
+                                  name: _defaultColorIndex
+                                - args:
+                                    - name: tableKey
+                                      value: roc_curve_val_table
+                                  fields: []
+                                  name: summaryTable
+                              name: runSets
+                panel_type: Vega2
+calibration_bins:
+    value: 10
+chosen_threshold_sensitivity:
+    value: 0.321223955496573
+chosen_threshold_specificity:
+    value: 0.22635418086156484
+max_depth:
+    value: null
+max_features:
+    value: sqrt
+min_samples_leaf:
+    value: 5
+model_type:
+    value: random_forest
+n_estimators:
+    value: 300
+n_jobs:
+    value: -1
+seed:
+    value: 42
+subgroups:
+    value:
+        - SOFA_bin
+        - CSRU
+target_sensitivity:
+    value: 0.85
+target_specificity:
+    value: 0.9
