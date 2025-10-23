@@ -1,0 +1,17 @@
+{
+  "os":  "Windows-10-10.0.26100-SP0",
+  "python":  "CPython 3.11.14",
+  "startedAt":  "2025-10-22T20:49:45.269555Z",
+  "program":  "c:\\Users\\idiaz\\OneDrive - IE University\\00. IE Courses\\01. 2025_H2\\1. ML4HC\\ICU_Survival_analysis\\04_ICU_ML_LR_DT_RF.ipynb",
+  "codePath":  "04_ICU_ML_LR_DT_RF.ipynb",
+  "codePathLocal":  "04_ICU_ML_LR_DT_RF.ipynb",
+  "git":  {
+    "remote":  "https://github.com/IE-ML-for-Healthcare/ICU_Survival_analysis.git",
+    "commit":  "abccaefa98e94ee2bd49b572c8377c6b9d8c22f3"
+  },
+  "email":  "idiazl@faculty.ie.edu",
+  "root":  "c:\\Users\\idiaz\\OneDrive - IE University\\00. IE Courses\\01. 2025_H2\\1. ML4HC\\ICU_Survival_analysis",
+  "host":  "IvanDiaz",
+  "executable":  "c:\\Users\\idiaz\\miniconda3\\envs\\icu-survival\\python.exe",
+  "writerId":  "dufw5pxoy98ulsmxfka00sykrxsmwjy0"
+}
