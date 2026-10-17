@@ -173,7 +173,7 @@ def predict_cif_from_csh(
 ) -> pd.DataFrame:
     """
     Patient-level CIF for the event of interest by combining two cause-specific Cox models
-    Implements F(t|x) ≈ Σ h_event(t_j|x) * S_all(t_{j-1}|x) * ΔH0_event(t_j)
+    Implements F(t|x) = Σ_j S_all(t_{j-1}|x) * (1 - exp(-ΔH_all(t_j|x))) * ΔH_event(t_j|x) / ΔH_all(t_j|x)
     """
     # baseline cumulative hazards and common time grid
     H0e = cph_event.baseline_cumulative_hazard_.iloc[:, 0]
@@ -194,12 +194,19 @@ def predict_cif_from_csh(
     He = np.outer(ph_e, H0e_g)
     Hc = np.outer(ph_c, H0c_g)
 
-    # left Riemann sum uses survival just before the step
-    S_prev = np.exp(-(He[:, :-1] + Hc[:, :-1]))      # n x (T-1)
-    h_e_inc = np.outer(ph_e, dH0e[1:])               # n x (T-1)
+    # Discrete-time version that always stays within [0, 1]:
+    # at each step, P(any event) = 1 - exp(-(dHe + dHc)), split between causes in proportion to dHe : dHc
+    dH0c = np.diff(H0c_g, prepend=0.0)
+    S_prev = np.exp(-(He[:, :-1] + Hc[:, :-1]))      # n x (T-1), survival just before the step
+    dHe = np.outer(ph_e, dH0e[1:])                   # n x (T-1)
+    dHc = np.outer(ph_c, dH0c[1:])
+    dH = dHe + dHc
+    with np.errstate(invalid="ignore", divide="ignore"):
+        share_e = np.where(dH > 0, dHe / dH, 0.0)
+    inc = S_prev * (1.0 - np.exp(-dH)) * share_e
 
     F = np.zeros((X_df.shape[0], t_grid.size), dtype=float)
-    F[:, 1:] = np.cumsum(h_e_inc * S_prev, axis=1)
+    F[:, 1:] = np.cumsum(inc, axis=1)
 
     # read CIF at requested times
     out = {}
@@ -257,20 +264,32 @@ def check_calibration_competing_risk(
     return pd.DataFrame(rows)
 
 
-def get_fixed_horizon_labels(y_df: pd.DataFrame, horizon_days: float):
+def get_fixed_horizon_labels(y_df: pd.DataFrame, horizon_days: float, discharge_is_known: bool = True):
     """
-    Fixed-horizon binary outcome and evaluability in survival data
+    Fixed-horizon binary outcome and evaluability for in-hospital death
+
+    Parameters
+    ----------
+    discharge_is_known : bool, default True
+        True (recommended for this dataset): a patient discharged alive before the horizon
+        is KNOWN not to die in hospital by the horizon, so they are evaluable with label 0.
+        Discharge is a competing event, not loss to follow-up.
+        False (legacy behaviour): anyone with event 0 before the horizon is dropped as
+        "censored". This removes the healthiest patients and inflates the event rate.
 
     Returns
     -------
     y_binary : np.ndarray of shape (n,)
-        1 if death occurred by horizon_days, else 0
+        1 if in-hospital death occurred by horizon_days, else 0
     evaluable_mask : np.ndarray of shape (n,)
-        True if not censored before the horizon (follow-up ≥ horizon or death before horizon)
+        True if the outcome at the horizon is known
     """
     time = y_df["duration_days"].astype(float).to_numpy()
     death = y_df["event_death"].astype(bool).to_numpy()
-    evaluable_mask = (time >= horizon_days) | ((time < horizon_days) & death)
+    if discharge_is_known:
+        evaluable_mask = np.ones_like(death, dtype=bool)
+    else:
+        evaluable_mask = (time >= horizon_days) | ((time < horizon_days) & death)
     y_binary = ((time <= horizon_days) & death).astype(int)
     return y_binary, evaluable_mask
 
@@ -554,7 +573,7 @@ def check_calibration_competing_risk_at(
         times, cif = cumulative_incidence_competing_risks(evt[m], dur[m])
         j = int(np.searchsorted(times, float(horizon_days), side="right") - 1)
         j = max(0, min(j, len(times) - 1))
-        obs = float(cif[0, j])  # index 0 corresponds to event type 1 (death)
+        obs = float(cif[1, j])  # scikit-survival: cif[0] = all causes, cif[1] = event 1 (death), cif[2] = event 2
 
         rows.append({"risk_quartile": label, "n": n,
                     "pred_mean_risk": pred_mean, "obs_risk": obs})

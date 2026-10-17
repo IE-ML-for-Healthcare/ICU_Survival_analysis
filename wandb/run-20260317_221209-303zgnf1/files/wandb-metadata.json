@@ -1,0 +1,40 @@
+{
+  "os":  "Windows-10-10.0.26200-SP0",
+  "python":  "CPython 3.11.15",
+  "startedAt":  "2026-03-17T21:12:09.580031Z",
+  "program":  "h:\\My Drive\\2025_n_before\\01. 2025\\01. 2025_H2\\1. ML4HC\\ICU_Survival_analysis\\04_ICU_ML_W&B.ipynb",
+  "codePath":  "h:\\My Drive\\2025_n_before\\01. 2025\\01. 2025_H2\\1. ML4HC\\ICU_Survival_analysis\\04_ICU_ML_W&B.ipynb",
+  "codePathLocal":  "04_ICU_ML_W&B.ipynb",
+  "git":  {
+    "remote":  "https://github.com/IE-ML-for-Healthcare/ICU_Survival_analysis.git",
+    "commit":  "1f90213cbc74f5378b77870e069c20f05fd383be"
+  },
+  "email":  "idiazl@faculty.ie.edu",
+  "root":  "h:\\My Drive\\2025_n_before\\01. 2025\\01. 2025_H2\\1. ML4HC\\ICU_Survival_analysis",
+  "host":  "IvanDiaz",
+  "executable":  "c:\\Users\\idiaz\\miniconda3\\envs\\icu-wandb-notebook\\python.exe",
+  "cpu_count":  16,
+  "cpu_count_logical":  22,
+  "gpu":  "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "1021821579264",
+      "used":  "397295808512"
+    }
+  },
+  "memory":  {
+    "total":  "33752997888"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GeForce RTX 4060 Laptop GPU",
+      "memoryTotal":  "8585740288",
+      "cudaCores":  3072,
+      "architecture":  "Ada",
+      "uuid":  "GPU-c8cc09aa-1864-aad2-d166-fe5d44ecf25d"
+    }
+  ],
+  "cudaVersion":  "12.8",
+  "writerId":  "0v1zfqyqssbzr6bvhffrttnse50uncm6"
+}
