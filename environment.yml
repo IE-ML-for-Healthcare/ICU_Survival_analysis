@@ -9,7 +9,7 @@ dependencies:
   - matplotlib
   - seaborn
   - scikit-learn
-  - lifelines
+  - lifelines>=0.30.3
   - scikit-survival
   - jupyterlab
   - wandb
