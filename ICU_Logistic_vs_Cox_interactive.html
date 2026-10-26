@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cox vs Logistic Loss</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one shared patient timeline on top, two model panels side by side, comparison table at the bottom */
+:root{
+  --bg:#f4f6f9; --surface:#ffffff; --ink:#16223a; --muted:#5a6479; --line:#dde2ea; --grid:#efe2e2;
+  --logit:#2f5fa8; --logit-soft:#dbe6f6; --cox:#b8640f; --cox-soft:#f6e6d3; --death:#b3261e; --seg:#c9d0dc; --seg2:#b5bdcc;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f141d; --surface:#161d29; --ink:#e5e9f1; --muted:#9aa4b6; --line:#283244; --grid:#2a2427;
+  --logit:#82a8ea; --logit-soft:#1e2c45; --cox:#efa357; --cox-soft:#3a2a18; --death:#ff7b72; --seg:#3a4558; --seg2:#2e3848; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0f141d; --surface:#161d29; --ink:#e5e9f1; --muted:#9aa4b6; --line:#283244; --grid:#2a2427;
+  --logit:#82a8ea; --logit-soft:#1e2c45; --cox:#efa357; --cox-soft:#3a2a18; --death:#ff7b72; --seg:#3a4558; --seg2:#2e3848; color-scheme:dark }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--f-body)}
+.wrap{max-width:1180px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:flex;flex-direction:column;gap:22px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(1.7rem,3.4vw,2.4rem)}
+h2{font-size:1.25rem}
+h3{font-size:1.02rem}
+p{margin:0}
+.lede{max-width:70ch;color:var(--muted);font-size:1.02rem}
+.lede b{color:var(--ink)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-size:.78rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;min-width:0}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.top{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:18px}
+.models{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:880px){.top,.models{grid-template-columns:1fr}}
+.panel{display:flex;flex-direction:column;gap:14px}
+.panel.logit{border-top:4px solid var(--logit)}
+.panel.cox{border-top:4px solid var(--cox)}
+.q{font-size:1rem}
+.q em{font-style:normal;font-weight:600}
+.formula{line-height:1.7;font-family:var(--f-mono);font-size:.9rem;background:var(--bg);border-radius:6px;padding:8px 10px;overflow-x:auto;white-space:nowrap}
+.ctrl{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+input[type=range]{width:100%}
+.logit input[type=range]{accent-color:var(--logit)}
+.cox input[type=range]{accent-color:var(--cox)}
+button{font:500 .92rem var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:6px 11px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--logit);outline-offset:2px}
+.btn-logit{background:var(--logit);border-color:var(--logit);color:var(--surface)}
+.btn-cox{background:var(--cox);border-color:var(--cox);color:var(--surface)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.stat{background:var(--bg);border-radius:6px;padding:8px 10px}
+.stat .v{font-family:var(--f-mono);font-size:1.15rem;font-weight:500}
+.stat .k{font-size:.8rem;color:var(--muted)}
+.list{display:flex;flex-direction:column;gap:4px;font-size:.92rem}
+.li{display:grid;align-items:center;gap:8px;padding:4px 6px;border-radius:5px}
+.logit .li{grid-template-columns:2.2rem 3.2rem 1fr 3.6rem}
+.cox .li{grid-template-columns:4.6rem 1fr 3.6rem;white-space:nowrap;cursor:pointer;border:1px solid transparent}
+.cox .li:hover{border-color:var(--line)}
+.cox .li.hdr{white-space:normal;line-height:1.3;cursor:default}
+.cox .li.on{background:var(--cox-soft);border-color:var(--cox)}
+.li .t{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+.hdr{font-size:.76rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.pbar{position:relative;height:16px;background:var(--bg);border-radius:3px;overflow:hidden}
+.pbar i{position:absolute;inset:0 auto 0 0;background:var(--logit-soft);border-right:2px solid var(--logit)}
+.pbar span{position:relative;font:500 .8rem var(--f-mono);padding-left:5px;line-height:16px}
+.stack{display:flex;height:18px;border-radius:3px;overflow:hidden;gap:1px;background:var(--bg)}
+.stack div{font:500 .74rem var(--f-mono);line-height:18px;text-align:center;overflow:hidden;white-space:nowrap;color:var(--ink)}
+.stack .s0{background:var(--seg)} .stack .s1{background:var(--seg2)}
+.stack .hit{background:var(--cox);color:var(--surface)}
+.curve{width:100%;height:auto;display:block}
+.note{font-size:.9rem;color:var(--muted)}
+.callout{border-left:3px solid var(--ink);padding:4px 0 4px 12px;max-width:80ch}
+table{border-collapse:collapse;width:100%;font-size:.94rem}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600}
+.tw{overflow-x:auto}
+.ed td,.ed th{padding:4px 6px}
+.ed input{width:4.2rem;font:.85rem var(--f-mono);padding:3px 5px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
+.st{min-width:6.6rem}
+.st.d{color:var(--death);border-color:var(--death)}
+.try{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.try .card{display:flex;flex-direction:column;gap:8px;padding:14px}
+.try button{align-self:flex-start}
+svg text{fill:var(--muted);font-family:var(--f-mono);font-size:12px}
+.warn{border-left:4px solid var(--death);padding:6px 10px;background:var(--bg);font-size:.92rem;border-radius:0 6px 6px 0}
+.leg{display:flex;flex-direction:column;gap:2px}
+.exgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:880px){.exgrid{grid-template-columns:1fr}}
+.exbox{background:var(--bg);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.exbox .num{font-family:var(--f-mono);font-size:.95rem;line-height:1.7}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:3px}
+details>summary{cursor:pointer;font-family:var(--f-display);font-size:1.25rem;font-weight:600}
+details>summary:focus-visible{outline:2px solid var(--logit);outline-offset:2px}
+details[open]>summary{margin-bottom:10px}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:10px">
+    <span class="eyebrow">AI for Healthcare: survival analysis</span>
+    <h1>Same recipe, different question: logistic loss vs Cox partial likelihood</h1>
+    <p class="lede">Both models do the same thing: write down the probability of <b>what actually happened</b>, take −log, and push β to make that number small. Cross-entropy <b>is</b> a negative log-likelihood. The difference is the question each probability answers:</p>
+    <ul class="lede" style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+      <li><b style="color:var(--logit)">Logistic regression:</b> did this patient die in hospital, yes or no? One probability per patient, time is ignored</li>
+      <li><b style="color:var(--cox)">Cox:</b> if one death happens at this moment, how likely is it to be this patient and not another one still in the ICU? One probability per death, time order matters</li>
+    </ul>
+    <p class="lede">Start with the worked example, then move the sliders and try the three experiments. Every symbol is explained at the bottom, in "How the numbers are calculated".</p>
+  </header>
+
+  <section class="top">
+    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <div class="row" style="justify-content:space-between">
+        <h2>9 ICU stays</h2>
+        <div class="row" style="gap:8px">
+          <button id="play" type="button">▶ Step through deaths</button>
+        </div>
+      </div>
+      <p class="note" id="tlnote">Each line is one stay. ● died in hospital, ○ discharged alive (censored for Cox, as in the notebook). Orange lines are the patients still at risk at the selected death. Click a death in the Cox panel to change it.</p>
+      <p class="note">These 9 patients are illustrative values written for this demo, not estimates from the ICU dataset. Age is the only predictor here. The notebook adjusts for several variables.</p>
+      <div class="tw"><svg id="tl" class="curve" role="img" aria-label="Patient timeline"></svg></div>
+    </div>
+    <div class="card" style="display:flex;flex-direction:column;gap:10px">
+      <h2>Edit the patients</h2>
+      <p class="note">x is age after simple preprocessing: x = (age − 60) / 10. It is calculated for you and is not learned. See "How the numbers are calculated" at the bottom</p>
+      <div class="tw"><table class="ed"><thead><tr><th>ID</th><th>Age</th><th>x</th><th>Day</th><th>Outcome</th></tr></thead><tbody id="ed"></tbody></table></div>
+      <button id="reset" type="button" style="align-self:flex-start">Reset patients</button>
+    </div>
+  </section>
+
+  <section class="card" style="display:flex;flex-direction:column;gap:12px">
+    <div class="row" style="justify-content:space-between"><h2 id="exTitle">Worked example: the first death</h2><span class="note">Start here. At β = 0, age has no effect</span></div>
+    <div class="exgrid">
+      <div class="exbox" style="border-top:4px solid var(--logit)">
+        <h3 style="color:var(--logit)">Logistic regression</h3>
+        <p id="exQL"></p>
+        <p class="num" id="exNL"></p>
+      </div>
+      <div class="exbox" style="border-top:4px solid var(--cox)">
+        <h3 style="color:var(--cox)">Cox proportional hazards</h3>
+        <p id="exQC"></p>
+        <p class="num" id="exNC"></p>
+      </div>
+    </div>
+    <p class="note">Each penalty is for one patient, not the total loss. The two models answer different questions, so compare the questions, not the sizes of the numbers. Move a β slider below and watch both penalties change.</p>
+  </section>
+
+  <section class="models">
+    <div class="card panel logit">
+      <div>
+        <span class="eyebrow" style="color:var(--logit)">Conventional ML</span>
+        <h2>Logistic regression with binary cross-entropy</h2>
+      </div>
+      <p class="q">Question per patient: <em>did this patient die in hospital, yes or no?</em> Time is invisible. Every patient is one independent coin flip.</p>
+      <div class="formula">p = σ(β₀ + β·x)<br>loss = −Σ [ y·log p + (1−y)·log(1−p) ]</div>
+      <p class="note">x = rescaled age (preprocessing). β and β₀ are learned. p is the model output</p>
+      <div class="ctrl"><label for="bL" class="mono">β</label><input id="bL" type="range" min="-2" max="4" step="0.01" value="0"><span class="mono" id="bLv">0.00</span></div>
+      <div class="row"><button id="fitL" class="btn-logit" type="button">Fit (find lowest loss)</button><span class="note">β₀ (intercept) is fitted for you at each β</span></div>
+      <div class="warn" id="warnL" hidden></div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="lossL">–</div><div class="k">loss = sum of −log p (computed)</div></div>
+        <div class="stat"><div class="v" id="orL">–</div><div class="k">odds ratio per 10 y = e^β (from β)</div></div>
+        <div class="stat"><div class="v" id="b0L">–</div><div class="k">intercept β₀ (learned)</div></div>
+      </div>
+      <svg id="cL" class="curve" viewBox="0 0 420 150" role="img" aria-label="Logistic loss curve"></svg>
+      <div class="note leg" id="legL"></div>
+      <div class="list" id="listL"></div>
+    </div>
+
+    <div class="card panel cox">
+      <div>
+        <span class="eyebrow" style="color:var(--cox)">Survival model</span>
+        <h2>Cox PH with negative log partial likelihood</h2>
+      </div>
+      <p class="q">Question per death: <em>if one death happens at this moment, how likely is it to be this patient and not another one still in the ICU?</em> Order in time matters. Discharged patients count while they are still there.</p>
+      <div class="formula">Lᵢ = e^(β·xᵢ) / Σ<sub>risk set</sub> e^(β·xⱼ)<br>loss = −Σ<sub>deaths</sub> log Lᵢ</div>
+      <p class="note">x = rescaled age (preprocessing). β is learned. e^(β·x) is the relative hazard, the model output. There is no intercept</p>
+      <div class="ctrl"><label for="bC" class="mono">β</label><input id="bC" type="range" min="-2" max="4" step="0.01" value="0"><span class="mono" id="bCv">0.00</span></div>
+      <div class="row"><button id="fitC" class="btn-cox" type="button">Fit (find lowest loss)</button><span class="note">No intercept: λ₀(t) cancels in the ratio</span></div>
+      <div class="warn" id="warnC" hidden></div>
+      <div class="stats">
+        <div class="stat"><div class="v" id="lossC">–</div><div class="k">loss = sum of −log Lᵢ (computed)</div></div>
+        <div class="stat"><div class="v" id="hrC">–</div><div class="k">hazard ratio per 10 y = e^β (from β)</div></div>
+        <div class="stat"><div class="v" id="nC">–</div><div class="k">deaths used</div></div>
+      </div>
+      <svg id="cC" class="curve" viewBox="0 0 420 150" role="img" aria-label="Cox loss curve"></svg>
+      <div class="note leg" id="legC"></div>
+      <div class="formula" id="coxDetail" style="white-space:normal;line-height:1.6" aria-live="polite"></div>
+      <div class="list" id="listC"></div>
+    </div>
+  </section>
+
+  <section class="card" style="display:flex;flex-direction:column;gap:12px">
+    <h2>The one idea to take home</h2>
+    <p class="callout"><b style="color:var(--logit)">Logistic regression</b> asks one yes/no question per patient: did this patient die? <b style="color:var(--cox)">Cox</b> asks one "who?" question per death: among everyone still in the ICU, who dies now? The model gives each of them a chance (their risk score divided by the total of all the scores). The penalty is −log of the chance it gave to the patient who really died. The penalty formula is the same in both models. Only the question changes.</p>
+    <p class="note">In ML terms: Cox applies a softmax (scores turned into chances that add up to 100%) over the risk set, then cross-entropy on the patient who died. Logistic regression applies a sigmoid, then cross-entropy on died or not.</p>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:12px">
+    <div class="row" style="justify-content:space-between"><h2>Try this in class (5 to 7 minutes)</h2><button id="resetAll" type="button">↺ Reset to default values</button></div>
+    <div class="try">
+      <div class="card"><h3>1. What does each model learn?</h3>
+        <ol class="note steps"><li>Press the button. Both β go to 0, so age has no effect</li><li>Read the worked example: each model gives patient A a penalty</li><li>Move a β slider and watch the probabilities and penalties change</li><li>Press Fit in each panel. The loss falls to its lowest point</li></ol>
+        <p class="note"><b>Takeaway:</b> both models learn β by making the total penalty as small as possible. They define the penalty differently</p>
+        <button id="t2" type="button">Set both β to 0</button></div>
+      <div class="card"><h3>2. Why does time matter?</h3>
+        <ol class="note steps"><li>Press the button. Patient A's death moves from day 3 to day 20. Nobody's outcome changes</li><li>The logistic loss stays the same</li><li>The Cox loss changes, because who was still at risk at each death has changed</li></ol>
+        <p class="note"><b>Takeaway:</b> Cox uses the order of events, logistic regression ignores it</p>
+        <button id="t1" type="button">Delay A's death to day 20</button></div>
+      <div class="card"><h3>3. Why do the coefficients differ?</h3>
+        <ol class="note steps"><li>Press the button to fit both models on the same 9 patients</li><li>Compare the two best β and the two e^β</li><li>Logistic gives an odds ratio, Cox gives a hazard ratio. They are different quantities, so do not compare them as if they were equal</li></ol>
+        <p class="note"><b>Takeaway:</b> the same patients and the same predictor give different β, because each model minimises a different penalty</p>
+        <button id="e3" type="button">Fit both models</button></div>
+    </div>
+    <details class="card">
+      <summary>Explore further</summary>
+      <div class="try">
+        <div class="card"><h3>Discharge vs death</h3><p class="note">Turn G (71 y, day 14) into a death, then press Fit in both panels. A 71-year-old now dies. Compare how much each fitted β moves.</p><button id="t3" type="button">Make G a death</button></div>
+        <div class="card"><h3>Only the order matters</h3><p class="note">Double every stay length. The order of deaths and discharges stays the same, so both losses stay identical. This holds for the partial likelihood, which Cox uses to learn β. The full Cox model still depends on time: the baseline hazard and the survival curves use the actual days.</p><button id="t5" type="button">Double all days</button> <span class="note" id="t5msg"></span></div>
+        <div class="card"><h3>Link to the slide</h3><p class="note">e^β per 10 y is the HR. Per year it is e^(β/10). With β = 0.1 per 10 y you get the slide's 0.01 per year, HR ≈ 1.01.</p><button id="t4" type="button">Set Cox β to 0.10</button></div>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" style="display:flex;flex-direction:column;gap:10px">
+    <h2>Side by side</h2>
+    <div class="tw"><table>
+      <thead><tr><th></th><th style="color:var(--logit)">Logistic regression</th><th style="color:var(--cox)">Cox proportional hazards</th></tr></thead>
+      <tbody>
+        <tr><th>Training objective</th><td>Minimise binary cross-entropy (= negative log-likelihood)</td><td>Minimise negative log partial likelihood</td></tr>
+        <tr><th>One likelihood term per</th><td>Patient</td><td>Death (event)</td></tr>
+        <tr><th>Probability in each term</th><td>P(died) for that patient</td><td>P(this patient is the one who dies | one death happens now)</td></tr>
+        <tr><th>Uses time</th><td>No. Day 3 and day 30 deaths look identical</td><td>Yes, through the order of events and who is still at risk (the full model also uses the actual days, in the baseline hazard)</td></tr>
+        <tr><th>Discharged alive</th><td>A known outcome here, so labelled 0. Patients whose final outcome is unknown cannot simply be labelled 0</td><td>Treated as censored for the death model: no term of their own, but they sit in every risk set until they leave</td></tr>
+        <tr><th>Intercept</th><td>β₀ needed</td><td>None. Baseline hazard λ₀(t) cancels, estimated afterwards (Breslow)</td></tr>
+        <tr><th>e^β means</th><td>Odds ratio. Not directly comparable with a hazard ratio</td><td>Hazard ratio, assumed the same at every t (the proportional hazards assumption). It must be checked, as in the notebook with check_assumptions</td></tr>
+        <tr><th>ML analogy</th><td>Sigmoid + binary cross-entropy</td><td>Softmax + cross-entropy over the current risk set</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Limits of this demo</h3>
+    <ul class="note" style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+      <li>Toy data with one predictor. The notebook fits a multivariable Cox model with <span class="mono">penalizer=0.01</span> (small L2 penalty) and Efron handling of tied death days. This page uses no penalty and the simpler Breslow convention for ties: everyone with day ≥ t is at risk</li>
+      <li>The two loss values are sums over different things (9 patients vs the number of deaths), so do not compare their sizes. Compare where each curve has its minimum</li>
+      <li>Discharge alive is a competing event. Treating it as censoring, as here and in the notebook's Cox model, estimates the cause-specific hazard of in-hospital death, not the absolute probability of dying. That is why the notebook adds the cumulative incidence function (CIF)</li>
+      <li>Only the order of events enters the partial likelihood. The baseline hazard and the survival curves still depend on the actual time scale</li>
+      <li>The partial likelihood does not estimate the baseline hazard λ₀(t). lifelines estimates it afterwards (Breslow estimator) to turn hazard ratios into survival curves</li>
+    </ul>
+  </section>
+
+  <details class="card">
+    <summary>How the numbers are calculated: where every symbol comes from</summary>
+    <p class="note" style="margin:0 0 10px">Nothing on this page is hidden. Each symbol is either data, preprocessing, something the model learns, or something computed from those.</p>
+    <div class="tw"><table>
+      <thead><tr><th>Symbol</th><th>What it is</th><th>Where it comes from</th><th>Part of the model?</th></tr></thead>
+      <tbody>
+        <tr><th>Age, Day, Outcome</th><td>One row per ICU stay</td><td>Illustrative values written for this demo (9 toy patients). Not taken from the PhysioNet dataset. You can edit them</td><td>No, this is data</td></tr>
+        <tr><th>x</th><td>Age rescaled: x = (age − 60) / 10</td><td>Simple preprocessing, the same as feature scaling. 60 is close to the average age of the 9 patients (61.2), and dividing by 10 makes β apply per decade. x carries the same information as age, only in different units. Nothing is learned here</td><td>No, it happens before the model</td></tr>
+        <tr><th>β</th><td>The weight of x</td><td>Learned. Training looks for the β with the lowest loss. The slider lets you try values by hand</td><td>Yes, the parameter. Each model has its own β</td></tr>
+        <tr><th>β₀</th><td>Intercept of the logistic model</td><td>Learned. Fitted automatically for each β on the slider. Cox has none</td><td>Yes, logistic only</td></tr>
+        <tr><th>p</th><td>Predicted probability of death, p = σ(β₀ + β·x)</td><td>Computed from β₀, β and x</td><td>Yes, logistic output</td></tr>
+        <tr><th>e^(β·x)</th><td>Relative hazard of a patient</td><td>Computed from β and x</td><td>Yes, Cox output</td></tr>
+        <tr><th>Partial likelihood term, Lᵢ</th><td>If one death happens at this moment, the probability that it is this patient and not another patient still in the ICU (the risk set). Calculated as this patient's e^(β·x) ÷ the sum of e^(β·x) over the risk set</td><td>Computed from the relative hazards and the real order of events</td><td>Yes, this is what Cox maximises</td></tr>
+        <tr><th>−log terms and loss</th><td>−log of the probability the model gave to what really happened, summed</td><td>Computed from model output and the real outcomes. Lower is better</td><td>Yes, this is what training minimises</td></tr>
+        <tr><th>best β</th><td>Dashed line on each loss curve</td><td>Found by a numeric search over β from −2 to 4 (golden section search). Same goal as gradient descent</td><td>The result of training</td></tr>
+        <tr><th>e^β</th><td>Odds ratio (logistic) or hazard ratio (Cox), per 10 years</td><td>Derived from β after fitting. A way to read β</td><td>No new parameter</td></tr>
+        <tr><th>−2 to 4, and 0.10</th><td>Slider range, and the value in the slide link experiment</td><td>Display choices only. 0.10 per 10 years = 0.01 per year, the number on your slide</td><td>No</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+</div>
+
+<script>
+(function(){
+const DEFAULT=[
+  {id:"A",age:82,day:3,died:true},{id:"B",age:45,day:4,died:false},{id:"C",age:74,day:6,died:true},
+  {id:"D",age:58,day:7,died:false},{id:"E",age:67,day:9,died:true},{id:"F",age:39,day:11,died:false},
+  {id:"G",age:71,day:14,died:false},{id:"H",age:52,day:18,died:true},{id:"I",age:63,day:21,died:false}];
+let pts=DEFAULT.map(p=>({...p}));
+let sel=0, timer=null, okL=true, okC=true;
+const $=id=>document.getElementById(id);
+const reduce=window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+const X=p=>(p.age-60)/10;
+const sig=z=>1/(1+Math.exp(-z));
+const f2=v=>isFinite(v)?v.toFixed(2):"∞";
+
+/* ---------- Logistic ---------- */
+function b0For(b){
+  let b0=0;
+  for(let k=0;k<60;k++){
+    let g=0,h=0;
+    for(const p of pts){const s=sig(b0+b*X(p));g+=(p.died?1:0)-s;h+=s*(1-s);}
+    if(h<1e-10)break;
+    const st=g/h; b0+=Math.max(-5,Math.min(5,st));
+    b0=Math.max(-20,Math.min(20,b0));
+    if(Math.abs(st)<1e-9)break;
+  }
+  return b0;
+}
+function logit(b){
+  const b0=b0For(b); let tot=0;
+  const rows=pts.map(p=>{const pr=sig(b0+b*X(p));const q=p.died?pr:1-pr;const t=-Math.log(Math.max(q,1e-300));tot+=t;return{p,pr,t};});
+  return{b0,rows,tot};
+}
+/* ---------- Cox ---------- */
+function deaths(){return pts.filter(p=>p.died).sort((a,b)=>a.day-b.day||a.id.localeCompare(b.id));}
+function cox(b){
+  let tot=0;
+  const rows=deaths().map(d=>{
+    const risk=pts.filter(p=>p.day>=d.day).sort((a,c)=>a.day-c.day||a.id.localeCompare(c.id));
+    const m=Math.max(...risk.map(p=>b*X(p)));
+    const w=risk.map(p=>Math.exp(b*X(p)-m)); const S=w.reduce((a,c)=>a+c,0);
+    const shares=risk.map((p,i)=>({p,s:w[i]/S}));
+    const sh=shares.find(o=>o.p===d).s; const t=-Math.log(sh); tot+=t;
+    return{d,risk,shares,sh,t};
+  });
+  return{rows,tot};
+}
+function golden(f,a,b){
+  const g=(Math.sqrt(5)-1)/2; let c=b-g*(b-a), d=a+g*(b-a), fc=f(c), fd=f(d);
+  for(let i=0;i<80;i++){ if(fc<fd){b=d;d=c;fd=fc;c=b-g*(b-a);fc=f(c);}else{a=c;c=d;fc=fd;d=a+g*(b-a);fd=f(d);} }
+  return (a+b)/2;
+}
+const lossL=b=>logit(b).tot, lossC=b=>cox(b).tot;
+
+/* ---------- Curves ---------- */
+function curve(svg,f,beta,color,label){
+  const W=420,H=150,L=40,R=10,T=12,B=26, lo=-2, hi=4;
+  const xs=[],ys=[]; for(let b=lo;b<=hi+1e-9;b+=0.05){xs.push(b);ys.push(f(b));}
+  const best=golden(f,lo,hi), fb=f(best);
+  const ymin=Math.min(...ys), ymax=Math.min(Math.max(...ys), ymin+8);
+  const sx=b=>L+(b-lo)/(hi-lo)*(W-L-R), sy=v=>T+(1-(v-ymin)/((ymax-ymin)||1))*(H-T-B);
+  const cid="clip-"+svg.id;
+  let s=`<clipPath id="${cid}"><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"/></clipPath>`;
+  for(let b=-2;b<=4;b++){s+=`<line x1="${sx(b)}" x2="${sx(b)}" y1="${T}" y2="${H-B}" stroke="var(--grid)"/><text x="${sx(b)}" y="${H-8}" text-anchor="middle">${b}</text>`;}
+  s+=`<text x="${W-R}" y="${H-8}" text-anchor="end" opacity="0">β</text>`;
+  s+=`<text x="4" y="${T+8}">${ymax.toFixed(1)}</text><text x="4" y="${H-B}">${ymin.toFixed(1)}</text>`;
+  s+=`<line x1="${L}" x2="${W-R}" y1="${H-B}" y2="${H-B}" stroke="var(--line)"/>`;
+  s+=`<path d="${xs.map((b,i)=>(i?"L":"M")+sx(b).toFixed(1)+","+sy(ys[i]).toFixed(1)).join("")}" fill="none" stroke="${color}" stroke-width="2" clip-path="url(#${cid})"/>`;
+  s+=`<line x1="${sx(best)}" x2="${sx(best)}" y1="${T}" y2="${H-B}" stroke="${color}" stroke-dasharray="3 3" opacity=".6"/>`;
+  const edge=best<=lo+0.03||best>=hi-0.03;
+  s+= sx(best)>270 ? `<text x="${sx(best)-4}" y="${T+10}" text-anchor="end" style="fill:${color}">best β = ${best.toFixed(2)}${edge?"*":""}</text>` : `<text x="${sx(best)+4}" y="${T+10}" style="fill:${color}">best β = ${best.toFixed(2)}${edge?"*":""}</text>`;
+  const fv=f(beta);
+  s+=`<circle cx="${sx(Math.max(lo,Math.min(hi,beta)))}" cy="${sy(Math.min(fv,ymax))}" r="5.5" fill="var(--surface)" stroke="${color}" stroke-width="2.5"/>`;
+  s+=`<text x="${W-R}" y="${T+10}" text-anchor="end">${label} vs β</text>`;
+  svg.innerHTML=s;
+  return {best,edge};
+}
+
+/* ---------- Timeline ---------- */
+function timeline(cr){
+  const svg=$("tl"); const rowH=28, L=86, R=60, T=22, n=pts.length;
+  const maxD=Math.max(25,...pts.map(p=>p.day))+1;
+  const W=640, H=T+n*rowH+26; svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  const sx=d=>L+d/maxD*(W-L-R);
+  const ev=cr.rows[sel]; const t=ev?ev.d.day:null;
+  const shareOf=new Map(ev?ev.shares.map(o=>[o.p,o.s]):[]);
+  let s="";
+  for(let d=0;d<=maxD;d+=5){s+=`<line x1="${sx(d)}" x2="${sx(d)}" y1="${T-6}" y2="${H-22}" stroke="var(--grid)"/><text x="${sx(d)}" y="${H-6}" text-anchor="middle">day ${d}</text>`;}
+  pts.forEach((p,i)=>{
+    const y=T+i*rowH+rowH/2; const inRisk=t===null||p.day>=t; const op=inRisk?1:.22;
+    const isHit=ev&&ev.d===p;
+    s+=`<g opacity="${op}"><text x="6" y="${y+4}" style="fill:var(--ink)">${p.id}, ${p.age} y</text>`;
+    s+=`<line x1="${sx(0)}" x2="${sx(p.day)}" y1="${y}" y2="${y}" stroke="${shareOf.has(p)?"var(--cox)":"var(--muted)"}" stroke-width="${shareOf.has(p)?4:2.5}" stroke-linecap="round"/>`;
+    s+= p.died?`<circle cx="${sx(p.day)}" cy="${y}" r="6" fill="var(--death)"/>`:`<circle cx="${sx(p.day)}" cy="${y}" r="5.5" fill="var(--surface)" stroke="var(--muted)" stroke-width="2"/>`;
+    if(isHit) s+=`<circle cx="${sx(p.day)}" cy="${y}" r="10" fill="none" stroke="var(--cox)" stroke-width="2"/>`;
+    s+=`</g>`;
+  });
+  if(t!==null){s+=`<line x1="${sx(t)}" x2="${sx(t)}" y1="${T-12}" y2="${H-22}" stroke="var(--cox)" stroke-width="1.5" stroke-dasharray="4 3"/><text x="${sx(t)+4}" y="${T-10}" style="fill:var(--cox)">day ${t}: ${ev.risk.length} at risk, ${ev.d.id} dies</text>`;}
+  svg.innerHTML=s;
+}
+
+/* ---------- Editor ---------- */
+function editor(){
+  $("ed").innerHTML=pts.map((p,i)=>`<tr><td class="mono">${p.id}</td>
+    <td><input id="age${i}" type="number" min="18" max="100" value="${p.age}" aria-label="Age of ${p.id}"></td>
+    <td class="mono" id="x${i}">${X(p).toFixed(2)}</td>
+    <td><input id="day${i}" type="number" min="1" max="200" value="${p.day}" aria-label="Day of ${p.id}"></td>
+    <td><button id="st${i}" type="button" class="st ${p.died?"d":""}">${p.died?"● Died":"○ Discharged"}</button></td></tr>`).join("");
+  pts.forEach((p,i)=>{
+    $("age"+i).addEventListener("input",e=>{const v=+e.target.value;if(v>=1&&v<=110){p.age=v;render();}});
+    $("day"+i).addEventListener("input",e=>{const v=+e.target.value;if(v>=1&&v<=200){p.day=v;render();}});
+    $("st"+i).addEventListener("click",e=>{p.died=!p.died;e.target.className="st "+(p.died?"d":"");e.target.textContent=p.died?"● Died":"○ Discharged";render();});
+  });
+}
+
+/* ---------- Render ---------- */
+function render(){
+  const bl=+$("bL").value, bc=+$("bC").value;
+  $("bLv").textContent=bl.toFixed(2); $("bCv").textContent=bc.toFixed(2);
+  pts.forEach((p,i)=>{const c=$("x"+i);if(c)c.textContent=X(p).toFixed(2);});
+  const lr=logit(bl), cr=cox(bc);
+  if(sel>=cr.rows.length) sel=0;
+  /* validity checks */
+  const nD=pts.filter(p=>p.died).length, N=pts.length;
+  const ages=pts.map(p=>p.age), flat=Math.max(...ages)===Math.min(...ages);
+  const informative=cr.rows.some(r=>r.risk.length>1);
+  const dd=deaths().map(d=>d.day), tied=dd.length!==new Set(dd).size;
+  let mL="", mC="";
+  if(flat){mL=mC="All patients have the same age, so an age effect cannot be estimated from these data.";}
+  else{
+    if(nD===0||nD===N) mL="All patients have the same outcome, so logistic regression has nothing to separate.";
+    if(nD===0) mC="No patient dies, so Cox has nothing to learn from.";
+    else if(!informative) mC="Each death happens when only that patient is at risk, so there is nothing to compare.";
+  }
+  okL=!mL; okC=!mC;
+  const wC=[mC,(tied&&okC)?"Two deaths share the same day. This page treats everyone with day ≥ t as at risk for each of them (Breslow approximation). The notebook uses the Efron method.":""].filter(Boolean).join("<br>");
+  $("warnL").hidden=!mL; $("warnL").innerHTML=mL;
+  $("warnC").hidden=!wC; $("warnC").innerHTML=wC;
+  $("fitL").disabled=!okL; $("fitC").disabled=!okC;
+  $("lossL").textContent=okL?lr.tot.toFixed(3):"–"; $("orL").textContent=okL?Math.exp(bl).toFixed(2):"–"; $("b0L").textContent=okL?lr.b0.toFixed(2):"–";
+  $("lossC").textContent=okC?cr.tot.toFixed(3):"–"; $("hrC").textContent=okC?Math.exp(bc).toFixed(2):"–"; $("nC").textContent=cr.rows.length+" / "+pts.length;
+  const leg=(c,b,r)=>`<span style="color:${c}">○ current β = ${b.toFixed(2)}</span><span style="color:${c}">- - best β = ${r.best.toFixed(2)}${r.edge?"*":""} (lowest loss)</span>${r.edge?"<span>* At the edge of the slider range, so the true best may lie further out.</span>":""}`;
+  $("cL").style.display=okL?"block":"none"; $("cC").style.display=okC?"block":"none";
+  if(okL){$("legL").innerHTML=leg("var(--logit)",bl,curve($("cL"),lossL,bl,"var(--logit)","loss"));}else{$("cL").innerHTML="";$("legL").innerHTML="";}
+  if(okC){$("legC").innerHTML=leg("var(--cox)",bc,curve($("cC"),lossC,bc,"var(--cox)","loss"));}else{$("cC").innerHTML="";$("legC").innerHTML="";}
+  /* worked example: first death */
+  const e0=cr.rows[0];
+  if(e0){
+    const lrow=lr.rows.find(r=>r.p===e0.d), n=e0.risk.length;
+    const hz=Math.exp(bc*X(e0.d)), tot=e0.risk.reduce((a,p)=>a+Math.exp(bc*X(p)),0);
+    $("exTitle").textContent=`Worked example: patient ${e0.d.id}, the first death (day ${e0.d.day})`;
+    $("exQL").innerHTML=`Question: did patient <b>${e0.d.id}</b> die in hospital? <b>Yes</b> (y = 1)`;
+    $("exNL").innerHTML=`The model gives p = <b>${(lrow.pr*100).toFixed(1)}%</b> chance of death${Math.abs(bl)<0.005?` (age is ignored: ${nD} of ${N} patients died, so everyone gets ${nD}/${N})`:""}<br>Penalty = −log(${lrow.pr.toFixed(3)}) = <b>${lrow.t.toFixed(2)}</b>`;
+    $("exQC").innerHTML=`Question: if one death happens on day ${e0.d.day}, how likely is it to be patient <b>${e0.d.id}</b> and not one of the other ${n-1} still in the ICU?`;
+    $("exNC").innerHTML=`The model gives Lᵢ = ${hz.toFixed(2)} ÷ ${tot.toFixed(2)} = <b>${(e0.sh*100).toFixed(1)}%</b>${Math.abs(bc)<0.005?` (age is ignored: everyone has the same risk score, so each of the ${n} gets 1/${n})`:""}<br>Penalty = −log(${e0.sh.toFixed(3)}) = <b>${e0.t.toFixed(2)}</b>`;
+  }else{
+    $("exTitle").textContent="Worked example: the first death";
+    $("exQL").textContent=$("exQC").textContent="Mark at least one patient as died to see the worked example.";
+    $("exNL").textContent=$("exNC").textContent="";
+  }
+  $("listL").innerHTML=`<div class="li hdr"><span>ID</span><span>y</span><span>predicted P(died)</span><span class="t">−log</span></div>`+
+    lr.rows.map(r=>`<div class="li"><span class="mono">${r.p.id}</span><span class="mono" style="color:${r.p.died?"var(--death)":"var(--muted)"}">${r.p.died?"1 died":"0"}</span>
+    <div class="pbar"><i style="width:${(r.pr*100).toFixed(1)}%"></i><span>${(r.pr*100).toFixed(0)}%</span></div><span class="t">${r.t.toFixed(2)}</span></div>`).join("")+
+    `<div class="li"><span></span><span></span><span class="note">sum over all ${pts.length} patients</span><span class="t" style="font-weight:600">${lr.tot.toFixed(2)}</span></div>`;
+  $("listC").innerHTML=cr.rows.length?(`<div class="li hdr" style="cursor:default"><span>death</span><span>Bar = risk set, orange = patient who died. Lᵢ = orange part ÷ whole bar</span><span class="t">−log</span></div>`+
+    cr.rows.map((r,i)=>`<div class="li ${i===sel?"on":""}" data-i="${i}" role="button" tabindex="0" aria-label="Death of ${r.d.id} on day ${r.d.day}">
+      <span class="mono">${r.d.id}, day ${r.d.day}</span>
+      <div class="stack">${r.shares.map((o,k)=>`<div class="${o.p===r.d?"hit":"s"+(k%2)}" style="width:${(o.s*100).toFixed(2)}%" title="${o.p.id}: ${(o.s*100).toFixed(1)}%">${o.s>.09?o.p.id:""}</div>`).join("")}</div>
+      <span class="t">${r.t.toFixed(2)}</span></div>`).join("")+
+    `<div class="li" style="cursor:default"><span></span><span class="note">sum over ${cr.rows.length} deaths, and ${pts.length-cr.rows.length} discharges add no term</span><span class="t" style="font-weight:600">${cr.tot.toFixed(2)}</span></div>`)
+    :`<p class="note">No deaths, so there is nothing to explain. Mark at least one patient as died.</p>`;
+  const ev=cr.rows[sel];
+  $("coxDetail").innerHTML=ev?(`<b>Day ${ev.d.day}, ${ev.d.id} dies. ${ev.risk.length} still at risk.</b><br>Relative hazard e^(β·x): `+
+    ev.risk.map(p=>`${p.id===ev.d.id?"<b>":""}${p.id} ${Math.exp(bc*X(p)).toFixed(2)}${p.id===ev.d.id?"</b>":""}`).join(", ")+
+    `<br>Lᵢ for ${ev.d.id} = ${Math.exp(bc*X(ev.d)).toFixed(2)} ÷ ${ev.risk.reduce((a,p)=>a+Math.exp(bc*X(p)),0).toFixed(2)} = ${(ev.sh*100).toFixed(1)}% → −log = ${ev.t.toFixed(2)}`+
+    `<br>Chance of being the one who dies, for each patient at risk (adds up to 100%): `+ev.shares.map(o=>`${o.p.id} ${(o.s*100).toFixed(1)}%`).join(", ")+
+    `<br>These are not probabilities of dying on this day. They only compare the patients still in the ICU.`):"";
+  $("coxDetail").hidden=!ev;
+  document.querySelectorAll("#listC .li[data-i]").forEach(el=>{
+    const go=()=>{stop();sel=+el.dataset.i;render();};
+    el.addEventListener("click",go); el.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();go();}});
+  });
+  const full=pts.some(p=>p.day*2>200); $("t5").disabled=full; $("t5msg").textContent=full?"Limit of 200 days reached. Use Reset.":"";
+  timeline(cr);
+}
+
+/* ---------- Actions ---------- */
+function animateTo(id,target){
+  const el=$(id), from=+el.value; target=Math.max(-2,Math.min(4,target));
+  if(reduce){el.value=target;render();return;}
+  const t0=performance.now(), dur=700;
+  (function step(now){const k=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-k,3); el.value=from+(target-from)*e; render(); if(k<1)requestAnimationFrame(step);})(t0);
+}
+function stop(){if(timer){clearInterval(timer);timer=null;$("play").textContent="▶ Step through deaths";}}
+$("play").addEventListener("click",()=>{
+  if(timer){stop();return;}
+  $("play").textContent="■ Stop";
+  timer=setInterval(()=>{const n=deaths().length;if(!n){stop();return;}sel=(sel+1)%n;render();},1800);
+});
+$("bL").addEventListener("input",render); $("bC").addEventListener("input",render);
+$("fitL").addEventListener("click",()=>{if(okL)animateTo("bL",golden(lossL,-2,4));});
+$("fitC").addEventListener("click",()=>{if(okC)animateTo("bC",golden(lossC,-2,4));});
+$("reset").addEventListener("click",()=>{pts=DEFAULT.map(p=>({...p}));sel=0;editor();render();});
+$("resetAll").addEventListener("click",()=>{stop();pts=DEFAULT.map(p=>({...p}));sel=0;$("bL").value=0;$("bC").value=0;editor();render();});
+$("t1").addEventListener("click",()=>{pts.find(p=>p.id==="A").day=20;editor();render();});
+$("t2").addEventListener("click",()=>{animateTo("bL",0);animateTo("bC",0);});
+$("t3").addEventListener("click",()=>{pts.find(p=>p.id==="G").died=true;editor();render();});
+$("t5").addEventListener("click",()=>{if(pts.some(p=>p.day*2>200))return;pts.forEach(p=>p.day*=2);editor();render();});
+$("e3").addEventListener("click",()=>{if(okL)animateTo("bL",golden(lossL,-2,4));if(okC)animateTo("bC",golden(lossC,-2,4));});
+$("t4").addEventListener("click",()=>animateTo("bC",0.10));
+
+editor(); $("bL").value=0; $("bC").value=0; render();
+})();
+</script>
+
+</body>
+</html>
