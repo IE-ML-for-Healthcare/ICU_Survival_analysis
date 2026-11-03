@@ -213,3 +213,6 @@ __marimo__/
 /wandb/
 /final_rf_model.joblib
 /tmp/
+
+# Local classroom cheatsheet
+/WandB_Class_Cheatsheet.md

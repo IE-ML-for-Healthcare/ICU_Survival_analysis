@@ -1,6 +1,6 @@
 # utils.py
-# Minimal, student-friendly utilities for Kaplan–Meier plotting by group
-# Dependencies: lifelines, matplotlib, pandas, numpy
+# Shared survival-analysis and experiment-tracking utilities
+# Dependencies: lifelines, scikit-survival, scikit-learn, matplotlib, pandas, numpy
 
 from sklearn.metrics import roc_auc_score, average_precision_score, brier_score_loss, confusion_matrix
 from sklearn.metrics import roc_auc_score, average_precision_score, brier_score_loss
@@ -15,10 +15,14 @@ import matplotlib.pyplot as plt
 from lifelines import CoxPHFitter, KaplanMeierFitter
 from lifelines.plotting import add_at_risk_counts
 from lifelines.statistics import logrank_test, multivariate_logrank_test
+from dataclasses import dataclass, field
+from pathlib import Path
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder, FunctionTransformer
 
 
 def _coerce_series(x: Union[pd.Series, Iterable]) -> pd.Series:
@@ -696,3 +700,196 @@ def fixed_horizon_metrics(y_true, p_prob, mask):
     auprc = average_precision_score(y, p)
     brier = brier_score_loss(y, p)
     return {"auroc": float(auroc), "auprc": float(auprc), "brier": float(brier), "n_evaluable": int(mask.sum())}
+
+
+# Helpers for the tracked machine-learning notebook
+# Tracking and explanation libraries are imported only when their helpers run
+
+
+@dataclass
+class WandbRunContext:
+    """Shared run settings and input versions, updated when data are logged."""
+
+    project: str
+    environment: dict
+    optional_surrogate: bool
+    seed: int
+    notebook: Path
+    mode: str
+    dataset_sha256: Optional[str] = None
+    split_sha256: Optional[str] = None
+    input_refs: list = field(default_factory=list)
+
+
+def start_run(name, job_type, config=None, tags=None, group=None, inputs=True, *, context):
+    """Record the environment, source code and pinned inputs for one run."""
+    import wandb
+
+    shared = {
+        "environment": context.environment,
+        "optional_surrogate": context.optional_surrogate,
+        "split_seed": context.seed,
+        "model_seed": context.seed,
+        "dataset_sha256": context.dataset_sha256,
+        "main_split_sha256": context.split_sha256,
+    }
+    run = wandb.init(
+        project=context.project, name=name, job_type=job_type,
+        config={**shared, **(config or {})}, tags=tags or [], group=group,
+        reinit="finish_previous", save_code=True,
+    )
+    source_files = {context.notebook.name, Path(__file__).name}
+    run.log_code(root=".", include_fn=lambda p: Path(p).name in source_files)
+    if context.mode == "online" and inputs:
+        for ref in context.input_refs:
+            run.use_artifact(ref)
+    return run
+
+
+def calibration_table(y_true, y_prob, n_bins=10):
+    """Quantile bins of predicted risk vs observed death rate, and the Expected Calibration Error (ECE):
+    the patient-weighted average gap between the two"""
+    q = pd.qcut(y_prob, q=n_bins, duplicates="drop")
+    if pd.isna(q).all():  # all predictions are equal: use one bin
+        q = pd.Categorical(["all patients"] * len(y_prob))
+    dfb = pd.DataFrame({"y_true": np.asarray(y_true), "y_prob": y_prob, "bin": q})
+    agg = dfb.groupby("bin", observed=False).agg(
+        mean_prob=("y_prob", "mean"), observed_rate=("y_true", "mean"), count=("y_true", "size")).reset_index()
+    agg["bin"] = agg["bin"].astype(str)
+    ece = float(np.sum(agg["count"] / agg["count"].sum() * np.abs(agg["observed_rate"] - agg["mean_prob"])))
+    return agg, ece
+
+
+def score(y_true, y_prob):
+    """Return ranking, probability-error and calibration metrics for one split."""
+    return {"auc": roc_auc_score(y_true, y_prob), "pr": average_precision_score(y_true, y_prob),
+            "brier": brier_score_loss(y_true, y_prob), "ece": calibration_table(y_true, y_prob)[1]}
+
+
+def log_curves(y_true, y_prob, split):
+    """Log receiver operating characteristic and precision-recall curves."""
+    import wandb
+    from wandb.plot import roc_curve as wandb_roc_curve
+    from wandb.plot import pr_curve as wandb_pr_curve
+
+    probas_2d = np.stack([1.0 - y_prob, y_prob], axis=1)
+    wandb.log({
+        f"roc_curve_{split}": wandb_roc_curve(np.asarray(y_true), probas_2d),
+        f"pr_curve_{split}": wandb_pr_curve(np.asarray(y_true), probas_2d),
+    })
+
+
+def log_top_bar(df, label, value, key, title, k=15):
+    """W&B bar chart of the k rows with the largest absolute value"""
+    import wandb
+
+    top = df.reindex(df[value].abs().sort_values(ascending=False).index).head(k)
+    wandb.log({key: wandb.plot.bar(wandb.Table(dataframe=top[[label, value]]), label, value, title=title)})
+
+
+def log_fig(key, fig):
+    """Log a matplotlib figure to W&B and also show it in the notebook"""
+    import wandb
+
+    wandb.log({key: wandb.Image(fig)})
+    fig.tight_layout()
+    plt.show()
+    plt.close(fig)
+
+
+def rf_shap(model, X_sample):
+    """Return SHapley Additive exPlanations (SHAP) values and base risk for class 1.
+
+    Values have shape (patients, features) and use probability units for a forest.
+    """
+    import shap
+
+    explainer = shap.TreeExplainer(model, feature_perturbation="tree_path_dependent")
+    sv = explainer.shap_values(X_sample)
+    sv = np.asarray(sv[1]) if isinstance(sv, list) else np.asarray(sv)
+    if sv.ndim == 3:
+        sv = sv[..., 1]
+    base = np.atleast_1d(explainer.expected_value)
+    return sv, float(base[1] if base.size > 1 else base[0])
+
+
+def make_split(split_seed, *, idx_dev, idx_test, y):
+    """Split development 75/25, retaining the same held-out test patients."""
+    itr, iva = train_test_split(idx_dev, test_size=0.25, stratify=y.loc[idx_dev], random_state=split_seed)
+    assert set(itr).isdisjoint(idx_test) and set(iva).isdisjoint(idx_test)
+    return itr, iva, idx_test
+
+
+def make_preprocessor(num_cols, cat_cols):
+    """Replace source missing codes, impute and encode the supplied columns."""
+    columns = ColumnTransformer([
+        ("num", SimpleImputer(strategy="median", keep_empty_features=True), num_cols),
+        ("cat", Pipeline([("imp", SimpleImputer(strategy="most_frequent", keep_empty_features=True)),
+                          ("oh", OneHotEncoder(handle_unknown="ignore", sparse_output=False))]), cat_cols),
+    ], verbose_feature_names_out=False).set_output(transform="pandas")
+    return Pipeline([
+        ("source_missing", FunctionTransformer(pd.DataFrame.replace,
+             kw_args={"to_replace": -1, "value": np.nan}, feature_names_out="one-to-one")),
+        ("columns", columns),
+    ])
+
+
+def prepare(X, itr, iva, *, num_cols, cat_cols):
+    """Fit preprocessing on training patients and transform validation inputs."""
+    pre = make_preprocessor(num_cols, cat_cols)
+    return pre.fit_transform(X.loc[itr]), pre.transform(X.loc[iva])
+
+
+def split_manifest(itr, iva, ite, *, ICU, id_col):
+    """List patient identifiers and their train, validation or test assignment."""
+    return pd.concat([pd.DataFrame({id_col: ICU.loc[idx, id_col].values, "split": name})
+                      for name, idx in [("train", itr), ("val", iva), ("test", ite)]], ignore_index=True)
+
+
+def run_baseline(name, model, config, tags, *, X_train_t, y_train, X_val_t, y_val, seed, start_run):
+    """Fit one model, log validation metrics and curves, return the open run, the fitted model and its validation risks"""
+    import wandb
+
+    run = start_run(name, "baseline", config={**config, "seed": seed}, tags=["baseline", *tags])
+    model.fit(X_train_t, y_train)
+    p_val = model.predict_proba(X_val_t)[:, 1]
+    metrics = {f"val_{k}": v for k, v in score(y_val, p_val).items()}
+    wandb.log(metrics)
+    log_curves(y_val, p_val, "val")
+    return run, model, p_val, metrics
+
+
+def perm_drop(model, feature, X_val_t, y_val, *, seed, repeats=5):
+    """Mean drop in validation average precision when one feature is shuffled"""
+    base = average_precision_score(y_val, model.predict_proba(X_val_t)[:, 1])
+    drops = []
+    for r in range(repeats):
+        Xp = X_val_t.copy()
+        Xp[feature] = np.random.default_rng(seed + r).permutation(Xp[feature].to_numpy())
+        drops.append(base - average_precision_score(y_val, model.predict_proba(Xp)[:, 1]))
+    return float(np.mean(drops))
+
+
+def train_rf_sweep(*, X_train_t, y_train, X_val_t, y_val, seed, start_run):
+    """Fit and log one sweep trial using the supplied development data."""
+    import wandb
+
+    run = start_run(None, "sweep-agent", tags=["sweep"])
+    cfg = wandb.config
+    from time import perf_counter
+    started = perf_counter()
+    model = RandomForestClassifier(
+        n_estimators=cfg.n_estimators, max_depth=None if cfg.max_depth == 0 else cfg.max_depth,
+        max_features=cfg.max_features, min_samples_leaf=cfg.min_samples_leaf,
+        oob_score=True, random_state=seed, n_jobs=-1).fit(X_train_t, y_train)
+    fit_seconds = perf_counter() - started
+    sc = score(y_val, model.predict_proba(X_val_t)[:, 1])
+    oob = model.oob_decision_function_[:, 1]
+    m = np.isfinite(oob) & (model.oob_decision_function_.sum(axis=1) > 0)
+    train_pr = average_precision_score(y_train, model.predict_proba(X_train_t)[:, 1])
+    wandb.log({**{f"val_{k}": v for k, v in sc.items()},
+               "fit_seconds": fit_seconds, "train_pr": train_pr, "overfit_gap_pr": train_pr - sc["pr"],
+               "oob_pr": average_precision_score(y_train.iloc[np.flatnonzero(m)], oob[m]),
+               "mean_tree_depth": float(np.mean([e.get_depth() for e in model.estimators_])),
+               "mean_leaves": float(np.mean([e.get_n_leaves() for e in model.estimators_]))})
+    run.finish()
