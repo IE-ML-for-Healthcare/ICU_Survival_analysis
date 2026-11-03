@@ -212,3 +212,4 @@ __marimo__/
 # Generated experiment runs and trained model
 /wandb/
 /final_rf_model.joblib
+/tmp/
