@@ -787,12 +787,13 @@ def log_top_bar(df, label, value, key, title, k=15):
     wandb.log({key: wandb.plot.bar(wandb.Table(dataframe=top[[label, value]]), label, value, title=title)})
 
 
-def log_fig(key, fig):
+def log_fig(key, fig, *, tight=True):
     """Log a matplotlib figure to W&B and also show it in the notebook"""
     import wandb
 
     wandb.log({key: wandb.Image(fig)})
-    fig.tight_layout()
+    if tight:
+        fig.tight_layout()
     plt.show()
     plt.close(fig)
 
@@ -893,3 +894,177 @@ def train_rf_sweep(*, X_train_t, y_train, X_val_t, y_val, seed, start_run):
                "mean_tree_depth": float(np.mean([e.get_depth() for e in model.estimators_])),
                "mean_leaves": float(np.mean([e.get_n_leaves() for e in model.estimators_]))})
     run.finish()
+
+
+def display_details_table(frame, title):
+    """Keep exact values available without making them the main visual output."""
+    from html import escape
+    from IPython.display import HTML, display
+
+    display(HTML(
+        f"<details><summary>{escape(title)}</summary>"
+        + frame.to_html(border=0) + "</details>"
+    ))
+
+
+def plot_patient_split(train_rows, val_rows, test_rows):
+    """Show the development pool and the test patients kept outside model choice."""
+    fig, ax = plt.subplots(figsize=(10, 2.7))
+    left = 0
+    for name, size, color in zip(
+        ["Training", "Validation", "Test"],
+        [train_rows, val_rows, test_rows],
+        ["#286A9F", "#BF7A25", "#68737D"],
+    ):
+        ax.barh(0, size, left=left, height=0.45, color=color, edgecolor="white")
+        ax.text(left + size / 2, 0, f"{name}\n{size:,}", ha="center", va="center", color="white")
+        left += size
+    ax.set(xlim=(0, left), ylim=(-0.7, 0.7), yticks=[], xlabel="Number of ICU stays")
+    ax.set_title("Separate development data from the fixed test patients", pad=18)
+    ax.text((train_rows + val_rows) / 2, -0.43, "Development pool: models are compared here", ha="center")
+    ax.text(train_rows + val_rows + test_rows / 2, -0.43, "Final evaluation", ha="center")
+    ax.spines[["left", "top", "right"]].set_visible(False)
+    fig.tight_layout()
+    return fig
+
+
+def plot_baseline_comparison(baseline_df, positive_rate):
+    """Compare ranking and probability error on the same validation patients."""
+    order = ["logistic_regression", "decision_tree", "random_forest"]
+    labels = ["Logistic regression", "Shallow tree", "Random forest"]
+    colors = ["#87929A", "#87929A", "#286A9F"]
+    fig, axes = plt.subplots(1, 2, figsize=(11.5, 4.0))
+    for ax, metric, title, xlabel in zip(
+        axes, ["val_pr", "val_brier"],
+        ["Ranking: higher is better", "Probability error: lower is better"],
+        ["Validation average precision", "Validation Brier score"],
+    ):
+        values = baseline_df.loc[order, metric].to_numpy(dtype=float)
+        ax.barh(labels, values, color=colors)
+        ax.invert_yaxis()
+        upper = max(values) * 1.25
+        ax.set(xlim=(0, upper), xlabel=xlabel, title=title)
+        for i, value in enumerate(values):
+            ax.text(value + upper * 0.02, i, f"{value:.3f}", va="center")
+        ax.grid(axis="x", alpha=0.18)
+        ax.set_axisbelow(True)
+    axes[0].axvline(positive_rate, color="#333333", linestyle="--")
+    fig.suptitle("Three models, the same validation patients", fontsize=14)
+    fig.text(0.5, 0.015, f"Dashed line: validation death fraction {positive_rate:.3f}, the average-precision reference", ha="center", fontsize=10)
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    return fig
+
+
+def plot_variance_comparison(var_df):
+    """Show observed score spread and paired model differences without inference bands."""
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.7))
+    groups = [("model_seed", "Forest seed changes", "#286A9F", "o"),
+              ("data_split", "Patient split changes", "#BF7A25", "s")]
+    for i, (source, label, color, marker) in enumerate(groups):
+        values = var_df.loc[var_df.source == source, "pr"].to_numpy(dtype=float)
+        offsets = np.linspace(-0.10, 0.10, len(values))
+        axes[0].scatter(values, i + offsets, color=color, marker=marker, s=55, zorder=3)
+        axes[0].text(float(np.mean(values)), i + 0.28, f"SD = {np.std(values, ddof=1):.3f}", ha="center")
+    axes[0].set(yticks=[0, 1], yticklabels=[g[1] for g in groups],
+                ylim=(1.6, -0.5), xlabel="Validation average precision", title="What moves the score?")
+    axes[0].grid(axis="x", alpha=0.18)
+    paired = var_df.loc[var_df.source == "data_split"].sort_values("seed")
+    values = paired.rf_minus_lr_pr.to_numpy(dtype=float)
+    y = np.arange(len(paired))
+    axes[1].barh(y, values, color=["#286A9F" if v >= 0 else "#BF7A25" for v in values])
+    axes[1].set(yticks=y, yticklabels=[f"Split {int(s)}" for s in paired.seed],
+                xlabel="Forest minus logistic regression\naverage precision", title="Paired comparison on each split")
+    axes[1].invert_yaxis()
+    axes[1].axvline(0, color="#333333", linewidth=1)
+    margin = max(float(np.abs(values).max()), 0.01) * 0.22
+    axes[1].set_xlim(min(0, float(values.min())) - margin, max(0, float(values.max())) + margin * 1.8)
+    for i, value in enumerate(values):
+        axes[1].text(value + (margin * 0.12 if value >= 0 else -margin * 0.12), i,
+                     f"{value:+.3f}", va="center", ha="left" if value >= 0 else "right")
+    fig.suptitle("Five repetitions: score spread and model advantage", fontsize=14)
+    fig.text(0.5, 0.015, "The splits overlap; the spread is descriptive, not a confidence interval", ha="center")
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    return fig
+
+
+def plot_sanity_comparison(null_comparison):
+    """Put held-out prediction quality beside the shuffled-model feature ranking."""
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
+    for ax, metric, title in zip(axes, ["AUROC", "average precision"],
+                                ["Validation ranking area", "Validation average precision"]):
+        values = null_comparison.loc[["real labels", "shuffled training labels"], metric].to_numpy(dtype=float)
+        ax.barh(["Original outcomes", "Shuffled outcomes"], values, color=["#286A9F", "#87929A"])
+        ax.invert_yaxis()
+        reference = float(null_comparison.loc["chance reference", metric])
+        ax.axvline(reference, color="#333333", linestyle="--")
+        ax.set(xlim=(0, max(values.max(), reference) * 1.25), xlabel=title)
+        for i, value in enumerate(values):
+            ax.text(value + values.max() * 0.025, i, f"{value:.3f}", va="center")
+    fig.suptitle("A feature ranking can remain when prediction becomes weak", fontsize=14)
+    fig.text(0.5, 0.015, f"Dashed lines: chance ranking 0.500; chance average precision {null_comparison.loc['chance reference', 'average precision']:.3f}", ha="center", fontsize=10)
+    fig.tight_layout(rect=(0, 0.08, 1, 1))
+    return fig
+
+
+def sweep_results_frame(completed_runs):
+    """Read a small plotting table from the same scored runs used for model selection."""
+    return pd.DataFrame([
+        {"run": run.name, "val_pr": float(run.summary["val_pr"]),
+         "fit_seconds": float(run.summary.get("fit_seconds", np.nan)),
+         "mean_leaves": float(run.summary.get("mean_leaves", np.nan))}
+        for run in completed_runs
+    ])
+
+
+def plot_sweep_tradeoff(sweep_results, baseline_pr):
+    """Plot recorded sweep results read back from W&B; do not fit or select a model."""
+    data = sweep_results.dropna(subset=["fit_seconds", "val_pr"])
+    if data.empty:
+        raise ValueError("No completed sweep trials with recorded fit_seconds and val_pr")
+    best = data.loc[data.val_pr.idxmax()]
+    fastest = data.loc[data.fit_seconds.idxmin()]
+    fig, ax = plt.subplots(figsize=(9, 4.7))
+    ax.scatter(data.fit_seconds, data.val_pr, color="#87929A", s=60, label="Completed trials")
+    ax.scatter([best.fit_seconds], [best.val_pr], color="#286A9F", marker="D", s=90, label="Highest validation score")
+    ax.axhline(baseline_pr, color="#333333", linestyle="--", label=f"Baseline {baseline_pr:.3f}")
+    ax.annotate(f"Best: {best.val_pr:.3f}\n{best.fit_seconds:.2f} s", (best.fit_seconds, best.val_pr),
+                xytext=(12, 12), textcoords="offset points")
+    if best.name != fastest.name:
+        ax.annotate(f"Fastest: {fastest.val_pr:.3f}\n{fastest.fit_seconds:.2f} s", (fastest.fit_seconds, fastest.val_pr),
+                    xytext=(12, -32), textcoords="offset points")
+    ax.set(xlabel="Recorded training time [s]", ylabel="Validation average precision",
+           title="W&B sweep results: performance against training time",
+           xlim=(0, float(data.fit_seconds.max()) * 1.30),
+           ylim=(min(float(data.val_pr.min()), baseline_pr) - 0.03,
+                 max(float(data.val_pr.max()), baseline_pr) + 0.04))
+    ax.grid(alpha=0.18)
+    ax.legend(loc="lower left", frameon=False)
+    fig.tight_layout()
+    return fig
+
+
+def plot_reproducibility_chain(input_refs, test_metrics, gap_file, gap_refit):
+    """Summarise the recorded inputs, pipeline and reconstruction checks."""
+    from matplotlib.patches import FancyBboxPatch
+
+    fig, ax = plt.subplots(figsize=(12, 4.8))
+    ax.set(xlim=(0, 1), ylim=(0, 1))
+    ax.axis("off")
+    inputs = "\n".join(ref.rsplit("/", 1)[-1] for ref in input_refs)
+    inputs = "Versioned inputs\n" + inputs if inputs else "Local inputs\nDataset + patient split\nRecorded checksums"
+    boxes = [(0.17, 0.74, inputs),
+             (0.50, 0.74, f"Final evaluation\nTest average precision\n{test_metrics['test_pr']:.3f}"),
+             (0.83, 0.74, "Pipeline artifact\nPreprocessing + forest\nSettings + library versions"),
+             (0.40, 0.24, f"Reload saved file\nMaximum probability gap\n{gap_file:.1e}"),
+             (0.80, 0.24, f"Rebuild from settings\nMaximum probability gap\n{gap_refit:.1e}")]
+    for x, y, label in boxes:
+        ax.add_patch(FancyBboxPatch((x - 0.145, y - 0.16), 0.29, 0.32,
+                                   boxstyle="round,pad=0.008", facecolor="#F1F5F7", edgecolor="#286A9F"))
+        ax.text(x, y, label, ha="center", va="center", fontsize=10.5)
+    for start, end in [((0.32, 0.74), (0.345, 0.74)), ((0.65, 0.74), (0.675, 0.74)),
+                       ((0.77, 0.57), (0.48, 0.42)), ((0.85, 0.57), (0.82, 0.42))]:
+        ax.annotate("", xy=end, xytext=start, arrowprops={"arrowstyle": "->", "color": "#333333", "lw": 1.5})
+    ax.set_title("The recorded experiment connects the data, model and checks", pad=15)
+    fig.text(0.5, 0.015, "Rebuilding also uses the same logged input data; matching predictions do not establish clinical validity", ha="center", fontsize=10)
+    fig.tight_layout(rect=(0, 0.05, 1, 1))
+    return fig
