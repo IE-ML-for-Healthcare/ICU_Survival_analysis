@@ -739,7 +739,9 @@ def start_run(name, job_type, config=None, tags=None, group=None, inputs=True, *
         reinit="finish_previous", save_code=True,
     )
     source_files = {context.notebook.name, Path(__file__).name}
-    run.log_code(root=".", include_fn=lambda p: Path(p).name in source_files)
+    # Recorded runs predate this name; keep both files separate from automatic notebook snapshots
+    run.log_code(root=".", name="icu-notebook-and-utils",
+                 include_fn=lambda p: Path(p).name in source_files)
     if context.mode == "online" and inputs:
         for ref in context.input_refs:
             run.use_artifact(ref)
