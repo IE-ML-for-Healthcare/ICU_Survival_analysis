@@ -619,35 +619,6 @@ def plot_calibration_at_horizon(
     plt.show()
 
 
-def fit_isotonic_calibrator(y_val, p_val):
-    """Fit an isotonic probability calibrator on validation predictions"""
-    y = np.asarray(y_val, dtype=int)
-    p = np.asarray(p_val, dtype=float)
-    eps = 1e-6
-    cal = IsotonicRegression(out_of_bounds="clip")
-    cal.fit(np.clip(p, eps, 1 - eps), y)
-    return cal
-
-
-def apply_calibrator(cal, p):
-    """Apply a fitted calibrator to probabilities"""
-    p = np.asarray(p, dtype=float)
-    eps = 1e-6
-    return np.clip(cal.transform(np.clip(p, eps, 1 - eps)), 0, 1)
-
-
-def fixed_horizon_metrics(y_true, p_prob, mask):
-    """AUROC, AUPRC, Brier, n_evaluable on the evaluable cohort for a horizon"""
-    y = np.asarray(y_true)[mask]
-    p = np.asarray(p_prob)[mask]
-    auroc = roc_auc_score(y, p) if len(np.unique(y)) > 1 else np.nan
-    auprc = average_precision_score(y, p)
-    brier = brier_score_loss(y, p)
-    return {"auroc": float(auroc), "auprc": float(auprc), "brier": float(brier), "n_evaluable": int(mask.sum())}
-
-# utils.py
-
-
 def align_evaluable(labels_dict, pred_df, prob_col):
     """Return aligned arrays y, p for the evaluable cohort at a horizon"""
     mask = labels_dict["mask"]
